@@ -9,6 +9,7 @@ import Membership from "@/models/Membership";
 import ActivityLog from "@/models/ActivityLog";
 import { memberCreateSchema } from "@/lib/validators/member";
 import { generateInvoiceNumber } from "@/lib/utils";
+import { recomputeMemberAggregates } from "@/lib/memberLedger";
 
 export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
   const { searchParams } = new URL(req.url);
@@ -17,7 +18,9 @@ export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const query: any = { ...getGymFilter(user) };
+  // isActive: { $ne: false } treats legacy members (no flag) as active and only
+  // hides the explicitly soft-deleted ones.
+  const query: any = { ...getGymFilter(user), isActive: { $ne: false } };
 
   if (search) {
     query.$or = [
@@ -147,6 +150,9 @@ export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
     } catch (err) {
       console.error("[members] Failed to create Membership record:", err);
     }
+
+    // Single writer of dueAmount + membership window.
+    await recomputeMemberAggregates(member._id);
   }
 
   // ── Activity log ──────────────────────────────────────────────────────────

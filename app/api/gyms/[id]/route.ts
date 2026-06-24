@@ -7,6 +7,7 @@ import Staff from "@/models/Staff";
 import Member from "@/models/Member";
 import Payment from "@/models/Payment";
 import Plan from "@/models/Plan";
+import Membership from "@/models/Membership";
 import ActivityLog from "@/models/ActivityLog";
 import { gymUpdateSchema } from "@/lib/validators/gym";
 
@@ -51,6 +52,7 @@ export const DELETE = apiHandlerWithParams<{ id: string }>(
     await Member.deleteMany({ gymId: id });
     await Payment.deleteMany({ gymId: id });
     await Plan.deleteMany({ gymId: id });
+    await Membership.deleteMany({ gymId: id });
     await ActivityLog.deleteMany({ gymId: id });
     await Gym.findByIdAndDelete(id);
 

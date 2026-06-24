@@ -49,7 +49,14 @@ export const PUT = apiHandlerWithParams<{ id: string }>(
 export const DELETE = apiHandlerWithParams<{ id: string }>(
   async (_req, user, { id }) => {
     const gymId = user.selectedGymId!;
-    const member = await Member.findOneAndDelete({ _id: id, gymId });
+    // Soft delete: members are never removed from the DB (preserves revenue /
+    // payment history). Setting isActive=false hides them from lists, counts,
+    // reports, and the payment member-picker. Restore via PUT { isActive: true }.
+    const member = await Member.findOneAndUpdate(
+      { _id: id, gymId },
+      { isActive: false },
+      { new: true }
+    );
     if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     await ActivityLog.create({

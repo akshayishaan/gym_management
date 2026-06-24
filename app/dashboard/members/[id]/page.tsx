@@ -4,8 +4,9 @@ import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, MessageCircle, Phone, CreditCard, Pencil,
-  User, Mail, MapPin, Calendar, AlertCircle, FileText, History, RefreshCw,
+  User, Mail, MapPin, Calendar, AlertCircle, FileText, History, RefreshCw, RotateCcw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +27,7 @@ interface Member {
   address?: string; gender?: string; dateOfBirth?: string;
   planId?: string; planName?: string; membershipStart?: string;
   membershipExpiry?: string; notes?: string; emergencyContact?: string;
-  dueAmount?: number;
+  dueAmount?: number; isActive?: boolean;
 }
 interface Payment {
   _id: string; amount: number; method: string; paidAt: string;
@@ -99,6 +100,16 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
   const fetchMemberships = () =>
     fetch(`/api/memberships?memberId=${id}`).then(r => r.json()).then(d => setMemberships(d.memberships || []));
 
+  async function restoreMember() {
+    const res = await fetch(`/api/members/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: true }),
+    });
+    if (res.ok) { toast.success("Member restored"); fetchMember(); }
+    else toast.error("Failed to restore member");
+  }
+
   useEffect(() => {
     Promise.all([fetchMember(), fetchPayments(), fetchMemberships()]);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +162,9 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight">{member.name}</h1>
-              {st && (
+              {member.isActive === false ? (
+                <Badge variant="destructive">Deleted</Badge>
+              ) : st && (
                 <Badge variant={statusVariant[st]} className="capitalize">{st}</Badge>
               )}
             </div>
@@ -164,31 +177,39 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {member.phone && (
+          {member.isActive === false ? (
+            <Button variant="default" size="sm" className="gap-2" onClick={restoreMember}>
+              <RotateCcw className="h-4 w-4" /> Restore Member
+            </Button>
+          ) : (
             <>
-              <a href={buildWhatsAppLink(member.phone, reminderMsg)} target="_blank" rel="noreferrer">
-                <Button variant="outline" size="sm" className="gap-2 text-success">
-                  <MessageCircle className="h-4 w-4" /> WhatsApp
+              {member.phone && (
+                <>
+                  <a href={buildWhatsAppLink(member.phone, reminderMsg)} target="_blank" rel="noreferrer">
+                    <Button variant="outline" size="sm" className="gap-2 text-success">
+                      <MessageCircle className="h-4 w-4" /> WhatsApp
+                    </Button>
+                  </a>
+                  <a href={buildSmsLink(member.phone, reminderMsg)}>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Phone className="h-4 w-4" /> SMS
+                    </Button>
+                  </a>
+                </>
+              )}
+              {st && (st === "expired" || st === "expiring") && (
+                <Button variant="default" size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
+                  <RefreshCw className="h-4 w-4" /> Renew
                 </Button>
-              </a>
-              <a href={buildSmsLink(member.phone, reminderMsg)}>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Phone className="h-4 w-4" /> SMS
-                </Button>
-              </a>
+              )}
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
+                <CreditCard className="h-4 w-4" /> Record Payment
+              </Button>
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => setEditOpen(true)}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
             </>
           )}
-          {st && (st === "expired" || st === "expiring") && (
-            <Button variant="default" size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
-              <RefreshCw className="h-4 w-4" /> Renew
-            </Button>
-          )}
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
-            <CreditCard className="h-4 w-4" /> Record Payment
-          </Button>
-          <Button size="sm" variant="outline" className="gap-2" onClick={() => setEditOpen(true)}>
-            <Pencil className="h-4 w-4" /> Edit
-          </Button>
         </div>
       </div>
 

@@ -9,6 +9,7 @@ import Membership from "@/models/Membership";
 import ActivityLog from "@/models/ActivityLog";
 import { paymentCreateSchema } from "@/lib/validators/payment";
 import { generateInvoiceNumber } from "@/lib/utils";
+import { recomputeMemberAggregates } from "@/lib/memberLedger";
 
 export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
   const { searchParams } = new URL(req.url);
@@ -60,10 +61,11 @@ export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
     if (!plan) {
       return NextResponse.json({ error: "Plan not found" }, { status: 404 });
     }
-    // Cap: a plan payment can settle the plan price + any pre-existing dues.
-    if (validated.amount > plan.price + oldDue) {
+    // Single-purpose payments: a plan payment covers the plan price only.
+    // Pre-existing dues are settled separately via a no-plan payment.
+    if (validated.amount > plan.price) {
       return NextResponse.json(
-        { error: "Amount exceeds total owed (plan price + outstanding dues)." },
+        { error: "Amount exceeds the plan price. Clear outstanding dues in a separate payment." },
         { status: 400 }
       );
     }
@@ -107,39 +109,25 @@ export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
     renewedUntil = new Date(renewFrom);
     renewedUntil.setDate(renewedUntil.getDate() + plan.durationDays);
 
-    // New ledger balance: add the plan price, subtract what was just paid.
-    const newDue = Math.max(0, oldDue + plan.price - validated.amount);
-
-    await Member.findByIdAndUpdate(validated.memberId, {
+    // Append to membership history.
+    await Membership.create({
+      gymId,
+      memberId: validated.memberId,
       planId: plan._id,
       planName: plan.name,
-      membershipStart: renewFrom,
-      membershipExpiry: renewedUntil,
-      dueAmount: newDue,
+      startDate: renewFrom,
+      expiryDate: renewedUntil,
+      paymentId: payment._id,
+      planPrice: plan.price,
+      amount: validated.amount,
+      grantedBy: user.id,
     });
-
-    // Append to membership history.
-    try {
-      await Membership.create({
-        gymId,
-        memberId: validated.memberId,
-        planId: plan._id,
-        planName: plan.name,
-        startDate: renewFrom,
-        expiryDate: renewedUntil,
-        paymentId: payment._id,
-        planPrice: plan.price,
-        amount: validated.amount,
-        grantedBy: user.id,
-      });
-    } catch (membershipErr) {
-      console.error("[payments] Failed to create Membership record:", membershipErr);
-    }
-  } else {
-    // ── Clear dues only ─────────────────────────────────────────────────────
-    const newDue = Math.max(0, oldDue - validated.amount);
-    await Member.findByIdAndUpdate(validated.memberId, { dueAmount: newDue });
   }
+
+  // Single writer of dueAmount + membership window — derive from the records
+  // we just wrote (the new Membership becomes the latest period; the payment
+  // reduces the balance).
+  await recomputeMemberAggregates(validated.memberId);
 
   await ActivityLog.create({
     gymId,

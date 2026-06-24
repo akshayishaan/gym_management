@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { useCurrencySymbol, useGymSettings } from "@/lib/useGymSettings";
 import { addDays, format } from "date-fns";
 
-interface Plan { _id: string; name: string; durationDays: number; price: number; }
+interface Plan { _id: string; name: string; durationDays: number; price: number; isActive?: boolean; }
 
 const DEFAULT_FORM = {
   name: "", phone: "", email: "", dateOfBirth: "",
@@ -74,7 +74,12 @@ export function MemberFormDialog({
 
   useEffect(() => {
     if (showMembership) {
-      fetch("/api/plans").then(r => r.json()).then(d => setPlans(Array.isArray(d) ? d : d.plans || []));
+      fetch("/api/plans")
+        .then(r => r.json())
+        .then(d => {
+          const all: Plan[] = Array.isArray(d) ? d : d.plans || [];
+          setPlans(all.filter(p => p.isActive !== false));
+        });
     }
   }, [showMembership]);
 

@@ -15,7 +15,8 @@ export interface IMember extends Document {
   membershipExpiry?: Date;
   notes?: string;
   emergencyContact?: string;
-  dueAmount: number;    // cached ledger balance: sum(plan prices) - sum(payments); see docs/denormalization-strategy.md
+  dueAmount: number;    // cached ledger balance: sum(plan prices) - sum(payments)
+  isActive: boolean;    // soft-delete flag; "deleting" a member sets this false
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +38,7 @@ const MemberSchema = new Schema<IMember>(
     notes: { type: String },
     emergencyContact: { type: String },
     dueAmount: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

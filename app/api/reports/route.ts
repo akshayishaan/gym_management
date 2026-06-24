@@ -28,6 +28,7 @@ export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
     {
       $match: {
         ...gymFilter,
+        isActive: { $ne: false },
         createdAt: { $gte: new Date(year, 0, 1), $lt: new Date(year + 1, 0, 1) },
       },
     },
@@ -36,7 +37,7 @@ export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
   ]);
 
   const planDistribution = await Member.aggregate([
-    { $match: { ...gymFilter, planName: { $exists: true, $ne: null } } },
+    { $match: { ...gymFilter, isActive: { $ne: false }, planName: { $exists: true, $ne: null } } },
     { $group: { _id: "$planName", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
   ]);

@@ -34,6 +34,7 @@ export const memberUpdateSchema = z.object({
   membershipExpiry: z.string().optional(),
   notes: z.string().max(1000).optional(),
   emergencyContact: z.string().max(20).optional(),
+  isActive: z.boolean().optional(), // restore a soft-deleted member
 });
 
 export type MemberCreateInput = z.infer<typeof memberCreateSchema>;

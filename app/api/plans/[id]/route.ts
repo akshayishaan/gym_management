@@ -28,22 +28,6 @@ export const PUT = apiHandlerWithParams<{ id: string }>(
   }
 );
 
-export const DELETE = apiHandlerWithParams<{ id: string }>(
-  async (_req, user, { id }) => {
-    const gymId = user.selectedGymId!;
-    const plan = await Plan.findOneAndDelete({ _id: id, gymId });
-    if (!plan) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    await ActivityLog.create({
-      gymId,
-      staffId: user.id,
-      staffName: user.name || "Unknown",
-      action: "deleted",
-      entity: "plan",
-      entityId: id,
-      details: `Deleted plan: ${plan.name}`,
-    });
-
-    return NextResponse.json({ success: true });
-  }
-);
+// Plans are never deleted — deactivate them via PUT { isActive: false } instead.
+// Historical Payments / Memberships keep their plan snapshots, and inactive
+// plans simply stop appearing in assignment dropdowns.

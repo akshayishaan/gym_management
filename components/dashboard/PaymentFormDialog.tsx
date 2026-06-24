@@ -30,7 +30,7 @@ interface Member {
   dueAmount?: number;
   membershipExpiry?: string;
 }
-interface Plan { _id: string; name: string; price: number; durationDays: number; }
+interface Plan { _id: string; name: string; price: number; durationDays: number; isActive?: boolean; }
 
 const METHODS = [
   { value: "cash", label: "Cash" },
@@ -90,9 +90,14 @@ export function PaymentFormDialog({
     setSelectedExpiry(null);
   }, [open, prefillMemberId, prefillMemberName]);
 
-  // Fetch plans once
+  // Fetch plans once — only active plans can be assigned/sold.
   useEffect(() => {
-    fetch("/api/plans").then(r => r.json()).then(d => setPlans(Array.isArray(d) ? d : d.plans || []));
+    fetch("/api/plans")
+      .then(r => r.json())
+      .then(d => {
+        const all: Plan[] = Array.isArray(d) ? d : d.plans || [];
+        setPlans(all.filter(p => p.isActive !== false));
+      });
   }, []);
 
   // Fetch the full member record (due + expiry) once a member is chosen / locked
@@ -142,11 +147,11 @@ export function PaymentFormDialog({
         ...f,
         planName: selectedPlan.name,
         membershipStart: f.membershipStart || defaultStart,
-        amount: String(selectedPlan.price + selectedDue),
+        amount: String(selectedPlan.price),
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlan?._id, selectedDue]);
+  }, [selectedPlan?._id]);
 
   function setField(key: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -177,7 +182,9 @@ export function PaymentFormDialog({
   // ── Derived amounts ─────────────────────────────────────────────────────────
   const amountNum = parseFloat(form.amount) || 0;
   const planPrice = selectedPlan?.price ?? 0;
-  const totalOwed = selectedPlan ? planPrice + selectedDue : selectedDue;
+  // Single-purpose: a plan payment is capped at the plan price; a no-plan
+  // payment is capped at the outstanding dues.
+  const totalOwed = selectedPlan ? planPrice : selectedDue;
   const validUntil =
     selectedPlan && form.membershipStart
       ? addDays(new Date(form.membershipStart), selectedPlan.durationDays)
@@ -394,13 +401,15 @@ export function PaymentFormDialog({
 
                     {/* Due breakdown card */}
                     <PaymentBreakdown
-                      items={[
-                        ...(selectedDue > 0 ? [{ label: "Previous due", value: selectedDue }] : []),
-                        { label: "Plan price", value: planPrice },
-                      ]}
+                      items={[{ label: "Plan price", value: planPrice }]}
                       amountPaid={amountNum}
                       currency={currency}
                     />
+                    {selectedDue > 0 && (
+                      <p className="text-xs text-warning">
+                        This member also has {formatCurrency(selectedDue, currency)} in outstanding dues — record a separate payment (no plan) to clear them.
+                      </p>
+                    )}
                   </>
                 ) : (
                   /* ── NO-PLAN PATH (clear dues) ──────────────────── */

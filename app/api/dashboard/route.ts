@@ -20,16 +20,16 @@ export const GET = apiHandler(async (_req: NextRequest, user: SessionUser) => {
     recentPayments,
     expiringList,
   ] = await Promise.all([
-    Member.countDocuments({ gymId }),
-    Member.countDocuments({ gymId, membershipExpiry: { $gte: today } }),
-    Member.countDocuments({ gymId, membershipExpiry: { $lt: today } }),
-    Member.countDocuments({ gymId, membershipExpiry: { $gte: today, $lte: weekLater } }),
+    Member.countDocuments({ gymId, isActive: { $ne: false } }),
+    Member.countDocuments({ gymId, isActive: { $ne: false }, membershipExpiry: { $gte: today } }),
+    Member.countDocuments({ gymId, isActive: { $ne: false }, membershipExpiry: { $lt: today } }),
+    Member.countDocuments({ gymId, isActive: { $ne: false }, membershipExpiry: { $gte: today, $lte: weekLater } }),
     Payment.aggregate([
       { $match: { gymId: { $eq: gymId }, paidAt: { $gte: startOfMonth }, status: "paid" } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     Payment.find({ gymId, status: "paid" }).sort({ paidAt: -1 }).limit(5).lean(),
-    Member.find({ gymId, membershipExpiry: { $gte: today, $lte: weekLater } })
+    Member.find({ gymId, isActive: { $ne: false }, membershipExpiry: { $gte: today, $lte: weekLater } })
       .sort({ membershipExpiry: 1 })
       .limit(10)
       .select("name phone membershipExpiry planName")

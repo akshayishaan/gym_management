@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Plus, Edit, Trash2, Dumbbell, Check, Clock, Zap } from "lucide-react";
+import { Plus, Edit, Power, PowerOff, Dumbbell, Check, Clock, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,11 +14,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
-  AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useForm } from "react-hook-form";
@@ -103,10 +98,18 @@ export default function PlansPage() {
     }
   }
 
-  async function deletePlan(id: string) {
-    const res = await fetch(`/api/plans/${id}`, { method: "DELETE" });
-    if (res.ok) { toast.success("Plan deleted"); fetchPlans(); }
-    else toast.error("Failed to delete plan");
+  async function togglePlanActive(plan: Plan) {
+    const res = await fetch(`/api/plans/${plan._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !plan.isActive }),
+    });
+    if (res.ok) {
+      toast.success(plan.isActive ? "Plan deactivated" : "Plan activated");
+      fetchPlans();
+    } else {
+      toast.error("Failed to update plan");
+    }
   }
 
   return (
@@ -235,35 +238,16 @@ export default function PlansPage() {
                           >
                             <Edit className="h-3.5 w-3.5" /> Edit
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /> Delete
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete "{plan.name}"?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will permanently remove the plan. Members currently on this plan
-                                  won't be affected but won't be able to renew with it.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="bg-destructive hover:bg-destructive/90"
-                                  onClick={() => deletePlan(plan._id)}
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className={`flex-1 gap-1.5 ${plan.isActive ? "text-muted-foreground" : "text-success"}`}
+                            onClick={() => togglePlanActive(plan)}
+                          >
+                            {plan.isActive
+                              ? <><PowerOff className="h-3.5 w-3.5" /> Deactivate</>
+                              : <><Power className="h-3.5 w-3.5" /> Activate</>}
+                          </Button>
                         </div>
                       </>
                     )}
