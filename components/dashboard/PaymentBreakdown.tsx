@@ -7,7 +7,7 @@ interface BreakdownItem {
 }
 
 interface PaymentBreakdownProps {
-  /** The charges / dues being settled. First item is left-aligned, the rest right-aligned. */
+  /** The charges / dues being settled, rendered as centered columns. */
   items: BreakdownItem[];
   amountPaid: number;
   currency: string;
@@ -18,9 +18,9 @@ interface PaymentBreakdownProps {
   className?: string;
 }
 
-function Cell({ label, value, align = "left" }: { label: string; value: string; align?: "left" | "right" }) {
+function Cell({ label, value }: { label: string; value: string }) {
   return (
-    <div className={cn("space-y-0.5", align === "right" && "text-right")}>
+    <div className="flex-1 space-y-0.5 text-center">
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className="font-medium">{value}</p>
     </div>
@@ -46,20 +46,19 @@ export function PaymentBreakdown({
   return (
     <div
       className={cn(
-        "rounded-lg bg-muted/50 border px-4 py-3 flex items-center justify-between gap-3 text-sm",
+        "rounded-lg bg-muted/50 border px-4 py-3 flex items-center gap-3 text-sm",
         className
       )}
     >
-      {items.map((item, idx) => (
+      {items.map((item) => (
         <Cell
           key={item.label}
           label={item.label}
           value={formatCurrency(item.value, currency)}
-          align={idx === 0 ? "left" : "right"}
         />
       ))}
-      <Cell label="Amount paid" value={formatCurrency(amountPaid, currency)} align="right" />
-      <div className="space-y-0.5 text-right">
+      <Cell label="Amount paid" value={formatCurrency(amountPaid, currency)} />
+      <div className="flex-1 space-y-0.5 text-center">
         <p className="text-muted-foreground text-xs">{balanceLabel}</p>
         {balance > 0 ? (
           <Badge variant="warning" className="font-semibold">
