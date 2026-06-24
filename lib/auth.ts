@@ -25,26 +25,26 @@ export const authOptions: NextAuthOptions = {
           name: staff.name,
           email: staff.email,
           role: staff.role,
-          gymIds: staff.gymIds.map((id: { toString: () => string }) => id.toString()),
         };
       },
     }),
   ],
   callbacks: {
+    // gymIds are intentionally NOT stored in the JWT. Gym membership is mutable
+    // (gyms get created, shared, removed) so it is hydrated fresh from the DB on
+    // every request in requireAuth() and fetched via /api/gyms on the client.
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role;
-        token.gymIds = (user as { gymIds?: string[] }).gymIds ?? [];
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        const u = session.user as { id?: string; role?: string; gymIds?: string[] };
+        const u = session.user as { id?: string; role?: string };
         u.id = token.id as string;
         u.role = token.role as string;
-        u.gymIds = (token.gymIds as string[]) ?? [];
       }
       return session;
     },

@@ -6,8 +6,11 @@ import { getToken } from "next-auth/jwt";
  * Next.js middleware for authentication protection.
  * - Redirects unauthenticated users from /dashboard/* to /login
  * - Redirects authenticated users from /login to /dashboard
- * - Sets default selectedGymId cookie if missing
  * - Allows API routes and static assets through
+ *
+ * The active gym is not defaulted here: gymIds are no longer in the JWT, so the
+ * server resolves the selected gym from the cookie in getSelectedGymId(),
+ * falling back to the user's first gym (read from the DB) when no cookie is set.
  */
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -38,25 +41,6 @@ export async function middleware(req: NextRequest) {
   // Redirect authenticated users away from login page
   if (token && pathname === "/login") {
     return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
-
-  // Set default selectedGymId cookie if user is authenticated and cookie is missing
-  if (token && pathname.startsWith("/dashboard")) {
-    const selectedGymId = req.cookies.get("selectedGymId")?.value;
-    const gymIds = (token.gymIds as string[]) ?? [];
-    const role = token.role as string;
-
-    if (!selectedGymId && role !== "superadmin" && gymIds.length > 0) {
-      const response = NextResponse.next();
-      response.cookies.set("selectedGymId", gymIds[0], {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-      });
-      return response;
-    }
   }
 
   return NextResponse.next();

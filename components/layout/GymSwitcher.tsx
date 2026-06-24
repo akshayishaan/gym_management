@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { ChevronsUpDown, Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,188 +22,154 @@ import {
 import { GymAvatar } from "@/components/ui/gym-avatar";
 import { useSidebar } from "@/components/ui/sidebar";
 import { toast } from "sonner";
-
-interface Gym {
-  _id: string;
-  name: string;
-  logo?: string;
-  primaryColor?: string;
-}
+import { Skeleton } from "@/components/ui/skeleton";
+import { useGyms } from "@/lib/hooks/useGyms";
+import { useGymSettings } from "@/lib/useGymSettings";
+import { GymFormDialog } from "@/components/dashboard/GymFormDialog";
 
 export function GymSwitcher() {
-  const { data: session } = useSession();
   const router = useRouter();
   const { state } = useSidebar();
-  const [gyms, setGyms] = useState<Gym[]>([]);
-  const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [gymFormOpen, setGymFormOpen] = useState(false);
 
-  const role = (session?.user as { role?: string })?.role;
-  const isSuperAdmin = role === "superadmin";
-  const gymIds = (session?.user as { gymIds?: string[] })?.gymIds ?? [];
+  // Shared cache — GymGuard and gyms/page draw from the same ["gyms"] entry
+  const { data: gyms = [], isLoading } = useGyms();
 
-  // Fetch gyms this admin has access to
-  useEffect(() => {
-    if (isSuperAdmin) return; // Superadmins don't switch gyms
-    if (gymIds.length === 0) return;
+  // selectedGymId and switchGym come from context (persisted in cookie,
+  // shared across all components — switching from the gyms page updates here too)
+  const { selectedGymId, switchGym } = useGymSettings();
+  const selectedGym = gyms.find((g) => g._id === selectedGymId) ?? gyms[0] ?? null;
 
-    fetch("/api/gyms")
-      .then((r) => r.json())
-      .then((data) => {
-        const gymList = Array.isArray(data) ? data : [];
-        setGyms(gymList);
-        // Set initial selected gym from cookie
-        const cookieGymId = document.cookie
-          .split("; ")
-          .find((row) => row.startsWith("selectedGymId="))
-          ?.split("=")[1];
-        if (cookieGymId) {
-          setSelectedGymId(cookieGymId);
-        } else if (gymList.length > 0) {
-          setSelectedGymId(gymList[0]._id);
-        }
-      })
-      .catch(() => {});
-  }, [isSuperAdmin, gymIds.length]);
-
-  const selectedGym = gyms.find((g) => g._id === selectedGymId);
-
-  const handleSelectGym = async (gymId: string) => {
+  const handleSelectGym = (gymId: string) => {
     if (gymId === selectedGymId) {
       setOpen(false);
       return;
     }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/select-gym", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gymId }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to switch gym");
-      }
-
-      setSelectedGymId(gymId);
-      setOpen(false);
-      // Refresh the page to reload all data for the new gym
-      router.refresh();
-      toast.success(`Switched to ${gyms.find((g) => g._id === gymId)?.name || "gym"}`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to switch gym");
-    } finally {
-      setLoading(false);
-    }
+    switchGym(gymId);
+    setOpen(false);
+    router.refresh();
+    toast.success(`Switched to ${gyms.find((g) => g._id === gymId)?.name || "gym"}`);
   };
 
-  // Superadmins don't see the gym switcher
-  if (isSuperAdmin) {
-    return (
-      <div className="flex items-center gap-3 px-2 py-2">
-        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-2 shrink-0 shadow-lg shadow-orange-500/20">
-          <div className="h-4 w-4 text-white flex items-center justify-center text-xs font-bold">S</div>
-        </div>
+  // ── Derived content (avoids multiple early returns that would prevent
+  //    GymFormDialog from always being in the tree) ────────────────────────
+  let gymContent: React.ReactNode;
+
+  if (isLoading) {
+    gymContent = (
+      <div className="flex items-center gap-2 px-2 py-2">
+        <Skeleton className="h-6 w-6 rounded-full shrink-0" />
         {state === "expanded" && (
-          <span className="font-bold text-sm truncate">SuperAdmin</span>
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3.5 w-24" />
+          </div>
         )}
       </div>
     );
-  }
-
-  // No gyms yet
-  if (gyms.length === 0 && !loading) {
-    return (
+  } else if (gyms.length === 0) {
+    gymContent = (
       <Button
         variant="outline"
         className="w-full justify-start gap-2"
-        onClick={() => router.push("/dashboard/gyms")}
+        onClick={() => setGymFormOpen(true)}
       >
         <Plus className="h-4 w-4" />
         {state === "expanded" && <span>Add Your First Gym</span>}
       </Button>
     );
+  } else {
+    gymContent = (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full justify-start gap-2 px-2 py-2 h-auto",
+              state === "collapsed" && "justify-center px-0"
+            )}
+            disabled={isLoading}
+          >
+            {selectedGym ? (
+              <GymAvatar
+                name={selectedGym.name}
+                logo={selectedGym.logo}
+                primaryColor={selectedGym.primaryColor}
+                className="h-6 w-6"
+              />
+            ) : (
+              <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+                ?
+              </div>
+            )}
+            {state === "expanded" && (
+              <>
+                <span className="flex-1 text-left text-sm font-medium truncate">
+                  {selectedGym?.name || "Select Gym"}
+                </span>
+                <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              </>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search gyms..." />
+            <CommandList>
+              <CommandEmpty>No gyms found.</CommandEmpty>
+              <CommandGroup heading="Your Gyms">
+                {gyms.map((gym) => (
+                  <CommandItem
+                    key={gym._id}
+                    value={gym.name}
+                    onSelect={() => handleSelectGym(gym._id)}
+                    className="gap-2 cursor-pointer"
+                  >
+                    <GymAvatar
+                      name={gym.name}
+                      logo={gym.logo}
+                      primaryColor={gym.primaryColor}
+                      className="h-6 w-6"
+                    />
+                    <span className="flex-1 truncate">{gym.name}</span>
+                    {gym._id === selectedGym?._id && (
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <CommandSeparator />
+              <CommandGroup>
+                <CommandItem
+                  onSelect={() => {
+                    setOpen(false);
+                    setGymFormOpen(true);
+                  }}
+                  className="gap-2 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add New Gym</span>
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "w-full justify-start gap-2 px-2 py-2 h-auto",
-            state === "collapsed" && "justify-center px-0"
-          )}
-          disabled={loading}
-        >
-          {selectedGym ? (
-            <GymAvatar
-              name={selectedGym.name}
-              logo={selectedGym.logo}
-              primaryColor={selectedGym.primaryColor}
-              className="h-6 w-6"
-            />
-          ) : (
-            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold">
-              ?
-            </div>
-          )}
-          {state === "expanded" && (
-            <>
-              <span className="flex-1 text-left text-sm font-medium truncate">
-                {selectedGym?.name || "Select Gym"}
-              </span>
-              <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            </>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search gyms..." />
-          <CommandList>
-            <CommandEmpty>No gyms found.</CommandEmpty>
-            <CommandGroup heading="Your Gyms">
-              {gyms.map((gym) => (
-                <CommandItem
-                  key={gym._id}
-                  value={gym.name}
-                  onSelect={() => handleSelectGym(gym._id)}
-                  className="gap-2 cursor-pointer"
-                >
-                  <GymAvatar
-                    name={gym.name}
-                    logo={gym.logo}
-                    primaryColor={gym.primaryColor}
-                    className="h-6 w-6"
-                  />
-                  <span className="flex-1 truncate">{gym.name}</span>
-                  {gym._id === selectedGymId && (
-                    <Check className="h-4 w-4 text-primary shrink-0" />
-                  )}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup>
-              <CommandItem
-                onSelect={() => {
-                  setOpen(false);
-                  router.push("/dashboard/gyms");
-                }}
-                className="gap-2 cursor-pointer"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Add New Gym</span>
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <>
+      {gymContent}
+      <GymFormDialog
+        open={gymFormOpen}
+        onOpenChange={setGymFormOpen}
+        onSuccess={(newGym) => {
+          switchGym(newGym._id);
+          router.refresh();
+        }}
+      />
+    </>
   );
 }

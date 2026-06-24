@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { MemberFormDialog } from "@/components/dashboard/MemberFormDialog";
+import { PaymentFormDialog } from "@/components/dashboard/PaymentFormDialog";
 import {
   Plus,
   Search,
@@ -14,6 +14,7 @@ import {
   Eye,
   MoreHorizontal,
   Users,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +61,9 @@ import {
   buildWhatsAppLink,
   buildSmsLink,
   daysUntilExpiry,
+  formatCurrency,
 } from "@/lib/utils";
+import { useCurrencySymbol } from "@/lib/useGymSettings";
 import { useSearchParams, useRouter } from "next/navigation";
 
 interface Member {
@@ -71,6 +74,7 @@ interface Member {
   planName?: string;
   membershipExpiry?: string;
   membershipStart?: string;
+  dueAmount?: number;
 }
 
 const statusVariant = {
@@ -80,9 +84,9 @@ const statusVariant = {
 };
 
 const statusDot = {
-  active: "bg-emerald-500",
-  expiring: "bg-amber-500",
-  expired: "bg-rose-500",
+  active: "bg-success",
+  expiring: "bg-warning",
+  expired: "bg-destructive",
 };
 
 function getInitials(name: string) {
@@ -100,6 +104,10 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [addOpen, setAddOpen] = useState(false);
+  const [editMember, setEditMember] = useState<import("@/components/dashboard/MemberFormDialog").MemberFormInitialData | null>(null);
+  const [renewMember, setRenewMember] = useState<{ id: string; name: string } | null>(null);
+  const currencySymbol = useCurrencySymbol();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -144,18 +152,16 @@ export default function MembersPage() {
         title="Members"
         description={`${total} total members`}
         actions={
-          <Link href="/dashboard/members/new">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Member
-            </Button>
-          </Link>
+          <Button className="gap-2" onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add Member
+          </Button>
         }
       />
 
       {/* Filters */}
       <Card className="border-0 shadow-card">
-        <CardContent className="pt-4 pb-4">
+        <CardContent className="p-4">
           <div className="flex gap-3 flex-wrap">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -181,6 +187,28 @@ export default function MembersPage() {
         </CardContent>
       </Card>
 
+      <MemberFormDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onSuccess={fetchMembers}
+      />
+
+      <MemberFormDialog
+        open={!!editMember}
+        onOpenChange={open => { if (!open) setEditMember(null); }}
+        initialData={editMember ?? undefined}
+        showMembership={false}
+        onSuccess={() => { setEditMember(null); fetchMembers(); }}
+      />
+
+      <PaymentFormDialog
+        open={!!renewMember}
+        onOpenChange={open => { if (!open) setRenewMember(null); }}
+        prefillMemberId={renewMember?.id}
+        prefillMemberName={renewMember?.name}
+        onSuccess={() => { setRenewMember(null); fetchMembers(); }}
+      />
+
       {/* Table */}
       <Card className="border-0 shadow-card overflow-hidden">
         <CardContent className="p-0">
@@ -188,7 +216,7 @@ export default function MembersPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-12">Member</TableHead>
+                  <TableHead>Member</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Expiry</TableHead>
@@ -231,7 +259,7 @@ export default function MembersPage() {
                           <Users className="h-6 w-6" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">No members found</p>
+                          <p className="text-sm font-medium">No members found</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             Try adjusting your search or filters
                           </p>
@@ -261,7 +289,16 @@ export default function MembersPage() {
                                 {getInitials(m.name)}
                               </AvatarFallback>
                             </Avatar>
-                            <span className="font-medium text-sm">{m.name}</span>
+                            <div>
+                              <span className="font-medium text-sm">{m.name}</span>
+                              {(m.dueAmount ?? 0) > 0 && (
+                                <div className="mt-0.5">
+                                  <Badge variant="warning" className="text-xs px-1.5 py-0 h-4">
+                                    {currencySymbol}{m.dueAmount} due
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -280,7 +317,7 @@ export default function MembersPage() {
                         <TableCell className="text-sm">
                           {m.membershipExpiry ? formatDate(m.membershipExpiry) : "—"}
                           {days !== null && days >= 0 && days <= 7 && (
-                            <span className="ml-1.5 text-xs text-amber-600 font-medium">
+                            <span className="ml-1.5 text-xs text-warning font-medium">
                               ({days}d left)
                             </span>
                           )}
@@ -307,7 +344,7 @@ export default function MembersPage() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -317,10 +354,25 @@ export default function MembersPage() {
                                 <Eye className="h-4 w-4 mr-2" />
                                 View Details
                               </DropdownMenuItem>
+                              {(st === "expired" || st === "expiring") && (
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRenewMember({ id: m._id, name: m.name });
+                                  }}
+                                  className="text-primary focus:text-primary"
+                                >
+                                  <RefreshCw className="h-4 w-4 mr-2" />
+                                  Renew Membership
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  router.push(`/dashboard/members/${m._id}/edit`);
+                                  // Fetch full member to pre-fill all fields in the dialog
+                                  fetch(`/api/members/${m._id}`)
+                                    .then(r => r.json())
+                                    .then(full => setEditMember(full));
                                 }}
                               >
                                 <Edit className="h-4 w-4 mr-2" />
@@ -335,7 +387,7 @@ export default function MembersPage() {
                                       window.open(buildWhatsAppLink(m.phone, msg), "_blank");
                                     }}
                                   >
-                                    <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
+                                    <MessageCircle className="h-4 w-4 mr-2 text-success" />
                                     WhatsApp
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
@@ -344,7 +396,7 @@ export default function MembersPage() {
                                       window.location.href = buildSmsLink(m.phone, msg);
                                     }}
                                   >
-                                    <Phone className="h-4 w-4 mr-2 text-blue-600" />
+                                    <Phone className="h-4 w-4 mr-2 text-primary" />
                                     SMS
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />

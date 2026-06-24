@@ -15,6 +15,7 @@ export interface IMember extends Document {
   membershipExpiry?: Date;
   notes?: string;
   emergencyContact?: string;
+  dueAmount: number;    // cached ledger balance: sum(plan prices) - sum(payments); see docs/denormalization-strategy.md
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +36,7 @@ const MemberSchema = new Schema<IMember>(
     membershipExpiry: { type: Date },
     notes: { type: String },
     emergencyContact: { type: String },
+    dueAmount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

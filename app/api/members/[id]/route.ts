@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiHandlerWithParams } from "@/lib/apiHandler";
-import { requireNotSuperAdmin, requireSuperAdminOrRole, ForbiddenError } from "@/lib/withAuth";
-import { SessionUser, isSuperAdmin } from "@/lib/session";
+import { ForbiddenError } from "@/lib/withAuth";
+import { SessionUser } from "@/lib/session";
 import Member from "@/models/Member";
 import ActivityLog from "@/models/ActivityLog";
 import { memberUpdateSchema } from "@/lib/validators/member";
@@ -11,8 +11,7 @@ export const GET = apiHandlerWithParams<{ id: string }>(
     const member = await Member.findById(id).lean();
     if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Scope check: gym staff can only see their gym's members
-    if (!isSuperAdmin(user) && String((member as { gymId?: unknown }).gymId) !== user.selectedGymId) {
+    if (String((member as { gymId?: unknown }).gymId) !== user.selectedGymId) {
       throw new ForbiddenError("You can only access members in your gym");
     }
 
@@ -22,8 +21,6 @@ export const GET = apiHandlerWithParams<{ id: string }>(
 
 export const PUT = apiHandlerWithParams<{ id: string }>(
   async (req, user, { id }) => {
-    requireNotSuperAdmin(user);
-
     const gymId = user.selectedGymId!;
     const body = await req.json();
     const validated = memberUpdateSchema.parse(body);
@@ -51,8 +48,6 @@ export const PUT = apiHandlerWithParams<{ id: string }>(
 
 export const DELETE = apiHandlerWithParams<{ id: string }>(
   async (_req, user, { id }) => {
-    requireSuperAdminOrRole(user, "admin");
-
     const gymId = user.selectedGymId!;
     const member = await Member.findOneAndDelete({ _id: id, gymId });
     if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });

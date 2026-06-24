@@ -9,11 +9,15 @@ export const memberCreateSchema = z.object({
   dateOfBirth: z.string().optional(),
   gender: z.enum(["male", "female", "other"]).optional(),
   planId: z.string().optional(),
-  planName: z.string().max(100).optional(),
+  // membershipStart may be supplied by the client; membershipExpiry is ALWAYS
+  // computed server-side from plan.durationDays — never accepted from client.
   membershipStart: z.string().optional(),
-  membershipExpiry: z.string().optional(),
   notes: z.string().max(1000).optional(),
   emergencyContact: z.string().max(20).optional(),
+  // Onboarding payment fields — stripped before Member.create, used to
+  // derive dueAmount and create the initial Payment + Membership records.
+  amountPaid: z.number().min(0).optional(),
+  paymentMethod: z.enum(["cash", "card", "upi", "bank_transfer", "other"]).optional(),
 });
 
 export const memberUpdateSchema = z.object({

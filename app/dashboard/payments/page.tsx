@@ -4,56 +4,32 @@ import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
 import {
-  Plus,
-  Search,
-  Download,
-  MoreHorizontal,
-  Trash2,
-  Eye,
-  Wallet,
+  Plus, MoreHorizontal, Trash2, Download, Wallet, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { PaymentFormDialog } from "@/components/dashboard/PaymentFormDialog";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { useGymSettings } from "@/lib/useGymSettings";
 
 interface Payment {
   _id: string;
@@ -67,31 +43,30 @@ interface Payment {
   planName?: string;
 }
 
-const methodConfig: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "success" | "warning" | "destructive" | "outline" }
-> = {
-  cash: { label: "Cash", variant: "success" },
-  card: { label: "Card", variant: "secondary" },
-  upi: { label: "UPI", variant: "default" },
-  bank_transfer: { label: "Bank", variant: "warning" },
-  other: { label: "Other", variant: "outline" },
+const methodConfig: Record<string, {
+  label: string;
+  variant: "default" | "secondary" | "success" | "warning" | "destructive" | "outline";
+}> = {
+  cash:          { label: "Cash",          variant: "success" },
+  card:          { label: "Card",          variant: "secondary" },
+  upi:           { label: "UPI",           variant: "default" },
+  bank_transfer: { label: "Bank",          variant: "warning" },
+  other:         { label: "Other",         variant: "outline" },
 };
 
 function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
 export default function PaymentsPage() {
+  const { currency } = useGymSettings();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [month, setMonth] = useState("");
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(currentMonth);
+  const [recordOpen, setRecordOpen] = useState(false);
   const searchParams = useSearchParams();
   const memberId = searchParams.get("memberId") || "";
 
@@ -107,16 +82,12 @@ export default function PaymentsPage() {
     setLoading(false);
   }, [memberId, month]);
 
-  useEffect(() => {
-    fetchPayments();
-  }, [fetchPayments]);
+  useEffect(() => { fetchPayments(); }, [fetchPayments]);
 
   async function deletePayment(id: string) {
     const res = await fetch(`/api/payments/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      toast.success("Payment deleted");
-      fetchPayments();
-    } else toast.error("Failed to delete payment");
+    if (res.ok) { toast.success("Payment deleted"); fetchPayments(); }
+    else toast.error("Failed to delete payment");
   }
 
   const totalAmount = payments.reduce((s, p) => s + p.amount, 0);
@@ -125,33 +96,73 @@ export default function PaymentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Payments"
-        description={`${total} records · Total: ${formatCurrency(totalAmount)}`}
+        description={`${total} record${total !== 1 ? "s" : ""} · Total: ${formatCurrency(totalAmount, currency)}`}
         actions={
-          <Link href="/dashboard/payments/new">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Record Payment
-            </Button>
-          </Link>
+          <Button className="gap-2" onClick={() => setRecordOpen(true)}>
+            <Plus className="h-4 w-4" /> Record Payment
+          </Button>
         }
       />
 
+      <PaymentFormDialog
+        open={recordOpen}
+        onOpenChange={setRecordOpen}
+        onSuccess={fetchPayments}
+      />
+
+      {/* ── Filter ──────────────────────────────────────────────────────── */}
       <Card className="border-0 shadow-card">
-        <CardContent className="pt-4 pb-4">
-          <div className="flex gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-48">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Filter by month (YYYY-MM)"
-                className="pl-9 h-10"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              />
-            </div>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2">
+            <Select
+              value={month ? month.split("-")[1] : ""}
+              onValueChange={m => {
+                const y = month ? month.split("-")[0] : String(new Date().getFullYear());
+                setMonth(m ? `${y}-${m}` : "");
+              }}
+            >
+              <SelectTrigger className="w-36 h-10">
+                <SelectValue placeholder="All months" />
+              </SelectTrigger>
+              <SelectContent>
+                {[
+                  "01","02","03","04","05","06",
+                  "07","08","09","10","11","12",
+                ].map((m, i) => (
+                  <SelectItem key={m} value={m}>
+                    {new Date(2000, i).toLocaleString("default", { month: "long" })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={month ? month.split("-")[0] : ""}
+              onValueChange={y => {
+                const m = month ? month.split("-")[1] : "";
+                setMonth(y && m ? `${y}-${m}` : "");
+              }}
+            >
+              <SelectTrigger className="w-28 h-10">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i)).map(y => (
+                  <SelectItem key={y} value={y}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {month && (
+              <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0" onClick={() => setMonth("")}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
+      {/* ── Table ───────────────────────────────────────────────────────── */}
       <Card className="border-0 shadow-card overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -173,25 +184,15 @@ export default function PaymentsPage() {
                     <TableRow key={i}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
+                          <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
                           <div className="h-4 w-24 bg-muted rounded animate-pulse" />
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="h-4 w-20 bg-muted rounded animate-pulse" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-4 w-20 bg-muted rounded animate-pulse" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-4 w-16 bg-muted rounded animate-pulse" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-5 w-14 bg-muted rounded-full animate-pulse" />
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-4 w-24 bg-muted rounded animate-pulse" />
-                      </TableCell>
+                      {[...Array(5)].map((_, j) => (
+                        <TableCell key={j}>
+                          <div className="h-4 bg-muted rounded animate-pulse" style={{ width: `${60 + j * 10}px` }} />
+                        </TableCell>
+                      ))}
                       <TableCell>
                         <div className="h-8 w-8 bg-muted rounded animate-pulse ml-auto" />
                       </TableCell>
@@ -201,39 +202,33 @@ export default function PaymentsPage() {
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground">
-                          <Wallet className="h-6 w-6" />
+                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                          <Wallet className="h-6 w-6 text-muted-foreground" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">
-                            No payments found
-                          </p>
+                          <p className="text-sm font-medium">No payments found</p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Record a payment to get started
+                            {month ? "No payments in this month" : "Record a payment to get started"}
                           </p>
                         </div>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  payments.map((p) => {
+                  payments.map(p => {
                     const method = methodConfig[p.method] || methodConfig.other;
                     return (
-                      <TableRow
-                        key={p._id}
-                        className="group hover:bg-muted/40 transition-colors"
-                      >
+                      <TableRow key={p._id} className="group hover:bg-muted/40 transition-colors">
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-bold">
+                            <Avatar className="h-8 w-8 shrink-0">
+                              <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                                 {getInitials(p.memberName)}
                               </AvatarFallback>
                             </Avatar>
                             <Link
                               href={`/dashboard/members/${p.memberId}`}
                               className="font-medium text-sm hover:underline"
-                              onClick={(e) => e.stopPropagation()}
                             >
                               {p.memberName}
                             </Link>
@@ -242,14 +237,14 @@ export default function PaymentsPage() {
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {p.invoiceNumber}
                         </TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="text-sm text-muted-foreground">
                           {p.planName || "—"}
                         </TableCell>
-                        <TableCell className="font-semibold text-sm text-emerald-600 font-mono">
-                          {formatCurrency(p.amount)}
+                        <TableCell className="font-semibold text-sm text-success font-mono">
+                          {formatCurrency(p.amount, currency)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={method.variant} className="capitalize text-xs">
+                          <Badge variant={method.variant} className="text-xs">
                             {method.label}
                           </Badge>
                         </TableCell>
@@ -279,7 +274,7 @@ export default function PaymentsPage() {
                                 <AlertDialogTrigger asChild>
                                   <DropdownMenuItem
                                     className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                    onSelect={(e) => e.preventDefault()}
+                                    onSelect={e => e.preventDefault()}
                                   >
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Delete

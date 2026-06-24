@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { AppSidebar } from "@/components/layout/Sidebar";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { GymGuard } from "@/components/dashboard/GymGuard";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
@@ -19,7 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </header>
         <main className="flex-1 overflow-auto">
           <div className="max-w-screen-2xl mx-auto px-6 py-6">
-            {children}
+            <GymGuard>{children}</GymGuard>
           </div>
         </main>
       </SidebarInset>

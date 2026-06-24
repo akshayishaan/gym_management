@@ -8,11 +8,9 @@ import {
   Users,
   CreditCard,
   BarChart3,
-  Settings,
   ClipboardList,
   Dumbbell,
   LogOut,
-  UserCog,
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,21 +32,13 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-const gymNavItems = [
+const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/gyms", label: "My Gyms", icon: Building2 },
   { href: "/dashboard/members", label: "Members", icon: Users },
   { href: "/dashboard/plans", label: "Plans", icon: Dumbbell },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
   { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-  { href: "/dashboard/staff", label: "Staff", icon: UserCog, adminOnly: true },
-  { href: "/dashboard/activity", label: "Activity Log", icon: ClipboardList, adminOnly: true },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, adminOnly: true },
-];
-
-const superadminNavItems = [
-  { href: "/dashboard/superadmin", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/superadmin/gyms", label: "Gyms", icon: Building2 },
   { href: "/dashboard/activity", label: "Activity Log", icon: ClipboardList },
 ];
 
@@ -56,8 +46,6 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role;
-  const isSuperAdmin = role === "superadmin";
-  const navItems = isSuperAdmin ? superadminNavItems : gymNavItems;
 
   const userInitials = session?.user?.name
     ?.split(" ")
@@ -80,13 +68,9 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                if ("adminOnly" in item && item.adminOnly && role !== "admin") return null;
-
                 const active =
                   pathname === item.href ||
-                  (item.href !== "/dashboard" &&
-                    item.href !== "/dashboard/superadmin" &&
-                    pathname.startsWith(item.href));
+                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
                 return (
                   <SidebarMenuItem key={item.href}>

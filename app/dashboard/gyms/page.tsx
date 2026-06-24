@@ -1,174 +1,72 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Building2, MapPin, Phone, Mail } from "lucide-react";
+import { Plus, Pencil, Building2, MapPin, Phone, Mail, Trash2, Check } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { GymAvatar } from "@/components/ui/gym-avatar";
-
-interface Gym {
-  _id: string;
-  name: string;
-  logo?: string;
-  primaryColor?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  currency: string;
-  isActive: boolean;
-  createdAt: string;
-}
-
-const emptyForm = {
-  name: "",
-  address: "",
-  phone: "",
-  email: "",
-  currency: "INR",
-  primaryColor: "#f97316",
-  expiryReminderDays: 7,
-  logo: "",
-};
+import { useGyms, useInvalidateGyms, type Gym } from "@/lib/hooks/useGyms";
+import { useGymSettings } from "@/lib/useGymSettings";
+import { GymFormDialog } from "@/components/dashboard/GymFormDialog";
+import { cn } from "@/lib/utils";
 
 export default function GymsPage() {
   const router = useRouter();
-  const [gyms, setGyms] = useState<Gym[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  const { data: gyms = [], isLoading } = useGyms();
+  const invalidateGyms = useInvalidateGyms();
+  const { switchGym, selectedGymId } = useGymSettings();
+
+  // ── Form dialog (create + edit) ───────────────────────────────────────────
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editGym, setEditGym] = useState<Gym | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [logoPreview, setLogoPreview] = useState<string>("");
 
-  const fetchGyms = () => {
-    setLoading(true);
-    fetch("/api/gyms")
-      .then((r) => r.json())
-      .then((data) => setGyms(Array.isArray(data) ? data : []))
-      .finally(() => setLoading(false));
-  };
+  const openCreate = () => { setEditGym(null); setDialogOpen(true); };
+  const openEdit = (gym: Gym) => { setEditGym(gym); setDialogOpen(true); };
 
-  useEffect(() => { fetchGyms(); }, []);
+  // ── Delete dialog ─────────────────────────────────────────────────────────
+  const [deleteGym, setDeleteGym] = useState<Gym | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const openCreate = () => {
-    setEditGym(null);
-    setForm(emptyForm);
-    setLogoPreview("");
-    setDialogOpen(true);
-  };
-
-  const openEdit = (gym: Gym) => {
-    setEditGym(gym);
-    setForm({
-      name: gym.name,
-      address: gym.address || "",
-      phone: gym.phone || "",
-      email: gym.email || "",
-      currency: gym.currency,
-      primaryColor: gym.primaryColor || "#f97316",
-      expiryReminderDays: 7,
-      logo: gym.logo || "",
-    });
-    setLogoPreview(gym.logo || "");
-    setDialogOpen(true);
-  };
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file size (max 500KB)
-    if (file.size > 500 * 1024) {
-      toast.error("Logo must be less than 500KB");
-      return;
-    }
-
-    // Convert to base64
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      setLogoPreview(base64);
-      setForm({ ...form, logo: base64 });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSave = async () => {
-    if (!form.name) return toast.error("Gym name is required");
-    setSaving(true);
+  const handleDeleteGym = async () => {
+    if (!deleteGym) return;
+    setDeleting(true);
     try {
-      if (editGym) {
-        const res = await fetch(`/api/gyms/${editGym._id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: form.name,
-            address: form.address,
-            phone: form.phone,
-            email: form.email,
-            currency: form.currency,
-            primaryColor: form.primaryColor,
-            expiryReminderDays: form.expiryReminderDays,
-            logo: form.logo || undefined,
-          }),
-        });
-        if (!res.ok) throw new Error("Failed to update gym");
-        toast.success("Gym updated");
-      } else {
-        const res = await fetch("/api/gyms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: form.name,
-            address: form.address,
-            phone: form.phone,
-            email: form.email,
-            currency: form.currency,
-            primaryColor: form.primaryColor,
-            expiryReminderDays: form.expiryReminderDays,
-            logo: form.logo || undefined,
-          }),
-        });
-        if (!res.ok) throw new Error("Failed to create gym");
-        toast.success("Gym created! You can now switch to it from the sidebar.");
+      const res = await fetch(`/api/gyms/${deleteGym._id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete gym");
       }
-      setDialogOpen(false);
-      fetchGyms();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSwitchToGym = async (gymId: string) => {
-    try {
-      const res = await fetch("/api/auth/select-gym", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gymId }),
-      });
-      if (!res.ok) throw new Error("Failed to switch gym");
-      toast.success("Gym switched!");
+      toast.success(`Gym "${deleteGym.name}" deleted`);
+      setDeleteGym(null);
+      await invalidateGyms();
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to switch gym");
+      toast.error(e instanceof Error ? e.message : "Failed to delete gym");
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const handleSwitchToGym = (gymId: string) => {
+    switchGym(gymId);
+    toast.success("Gym switched!");
+    router.refresh();
   };
 
   return (
@@ -183,7 +81,7 @@ export default function GymsPage() {
         }
       />
 
-      {loading ? (
+      {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="border-0 shadow-card">
@@ -219,56 +117,77 @@ export default function GymsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
             >
-              <Card className="border-0 shadow-card hover:shadow-card-hover transition-shadow duration-300 group">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
+              <Card className={cn(
+                "border-0 shadow-card hover:shadow-card-hover transition-all duration-200 overflow-hidden",
+                gym._id === selectedGymId && "ring-2 ring-primary/50"
+              )}>
+                <CardContent className="p-5">
+                  {/* Header: avatar + name + badges */}
+                  <div className="flex items-start gap-3">
                     <GymAvatar
                       name={gym.name}
                       logo={gym.logo}
                       primaryColor={gym.primaryColor}
-                      className="h-12 w-12"
+                      className="h-10 w-10 shrink-0 mt-0.5"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold truncate">{gym.name}</h3>
+                      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                        <h3 className="font-semibold text-sm truncate">{gym.name}</h3>
                         <Badge variant={gym.isActive ? "default" : "secondary"} className="text-xs shrink-0">
                           {gym.isActive ? "Active" : "Inactive"}
                         </Badge>
+                        {gym._id === selectedGymId && (
+                          <Badge variant="outline" className="text-xs shrink-0 gap-1 text-primary border-primary/40">
+                            <Check className="h-3 w-3" /> Current
+                          </Badge>
+                        )}
                       </div>
-                      {gym.address && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1 mb-1">
-                          <MapPin className="h-3 w-3 shrink-0" /> {gym.address}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+
+                      {/* Contact details — one per line so nothing overflows */}
+                      <div className="space-y-1">
+                        {gym.address && (
+                          <p className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{gym.address}</span>
+                          </p>
+                        )}
                         {gym.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> {gym.phone}
-                          </span>
+                          <p className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{gym.phone}</span>
+                          </p>
                         )}
                         {gym.email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" /> {gym.email}
-                          </span>
+                          <p className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{gym.email}</span>
+                          </p>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-4 pt-4 border-t">
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 mt-4 pt-3 border-t">
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant={gym._id === selectedGymId ? "secondary" : "outline"}
                       className="flex-1"
+                      disabled={gym._id === selectedGymId}
                       onClick={() => handleSwitchToGym(gym._id)}
                     >
-                      Switch to Gym
+                      {gym._id === selectedGymId ? "Current Gym" : "Switch to Gym"}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="shrink-0" onClick={() => openEdit(gym)}>
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => openEdit(gym)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteGym(gym)}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardContent>
@@ -278,118 +197,36 @@ export default function GymsPage() {
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editGym ? "Edit Gym" : "Add New Gym"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* Logo upload */}
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                {logoPreview ? (
-                  <img
-                    src={logoPreview}
-                    alt="Logo preview"
-                    className="h-16 w-16 rounded-xl object-cover border-2 border-border"
-                  />
-                ) : (
-                  <div className="h-16 w-16 rounded-xl bg-muted flex items-center justify-center">
-                    <Building2 className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1 shadow-sm hover:bg-primary/90 transition-colors"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleLogoChange}
-                />
-              </div>
-              <div className="text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Gym Logo</p>
-                <p>Click to upload. Max 500KB.</p>
-                <p>If no logo, first letter of gym name will be used.</p>
-              </div>
-            </div>
+      {/* ── Shared create/edit dialog ───────────────────────────────────────── */}
+      <GymFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        gym={editGym}
+        onSuccess={() => router.refresh()}
+      />
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1">
-                <Label>Gym Name *</Label>
-                <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Fitness First"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Phone</Label>
-                <Input
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  placeholder="+91 98765 43210"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="gym@example.com"
-                />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label>Address</Label>
-                <Input
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  placeholder="123 Main St"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Currency</Label>
-                <Input
-                  value={form.currency}
-                  onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                  placeholder="INR"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Primary Color</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={form.primaryColor}
-                    onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
-                    className="h-9 w-9 rounded border cursor-pointer"
-                  />
-                  <Input
-                    value={form.primaryColor}
-                    onChange={(e) => setForm({ ...form, primaryColor: e.target.value })}
-                    placeholder="#f97316"
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : editGym ? "Update Gym" : "Create Gym"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ── Delete confirmation ─────────────────────────────────────────────── */}
+      <AlertDialog open={!!deleteGym} onOpenChange={(open) => !open && setDeleteGym(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteGym?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this gym and all its members, plans, payments, and
+              activity logs. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteGym}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting..." : "Delete Gym"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

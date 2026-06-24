@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiHandlerWithParams } from "@/lib/apiHandler";
-import { requireSuperAdminOrRole } from "@/lib/withAuth";
 import { SessionUser } from "@/lib/session";
 import Plan from "@/models/Plan";
 import ActivityLog from "@/models/ActivityLog";
@@ -8,17 +7,11 @@ import { planUpdateSchema } from "@/lib/validators/plan";
 
 export const PUT = apiHandlerWithParams<{ id: string }>(
   async (req, user, { id }) => {
-    requireSuperAdminOrRole(user, "admin");
-
     const gymId = user.selectedGymId!;
     const body = await req.json();
     const validated = planUpdateSchema.parse(body);
 
-    const plan = await Plan.findOneAndUpdate(
-      { _id: id, gymId },
-      validated,
-      { new: true }
-    );
+    const plan = await Plan.findOneAndUpdate({ _id: id, gymId }, validated, { new: true });
     if (!plan) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     await ActivityLog.create({
@@ -37,8 +30,6 @@ export const PUT = apiHandlerWithParams<{ id: string }>(
 
 export const DELETE = apiHandlerWithParams<{ id: string }>(
   async (_req, user, { id }) => {
-    requireSuperAdminOrRole(user, "admin");
-
     const gymId = user.selectedGymId!;
     const plan = await Plan.findOneAndDelete({ _id: id, gymId });
     if (!plan) return NextResponse.json({ error: "Not found" }, { status: 404 });

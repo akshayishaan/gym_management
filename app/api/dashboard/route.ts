@@ -1,27 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiHandler } from "@/lib/apiHandler";
-import { SessionUser, isSuperAdmin } from "@/lib/session";
+import { SessionUser } from "@/lib/session";
 import Member from "@/models/Member";
 import Payment from "@/models/Payment";
-import Gym from "@/models/Gym";
 
-export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
-  // Superadmin gets aggregate stats across all gyms
-  if (isSuperAdmin(user)) {
-    const { searchParams } = new URL(req.url);
-    const gymId = searchParams.get("gymId");
-    const gymFilter = gymId ? { gymId } : {};
-    const [totalGyms, totalMembers, totalRevenue] = await Promise.all([
-      Gym.countDocuments({ isActive: true }),
-      Member.countDocuments(gymFilter),
-      Payment.aggregate([
-        { $match: { status: "paid", ...gymFilter } },
-        { $group: { _id: null, total: { $sum: "$amount" } } },
-      ]),
-    ]);
-    return NextResponse.json({ isSuperAdmin: true, totalGyms, totalMembers, totalRevenue: totalRevenue[0]?.total || 0 });
-  }
-
+export const GET = apiHandler(async (_req: NextRequest, user: SessionUser) => {
   const gymId = user.selectedGymId!;
   const today = new Date();
   const weekLater = new Date();

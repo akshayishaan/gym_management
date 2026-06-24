@@ -4,33 +4,26 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Plus, Edit, Trash2, Dumbbell, Check, Users } from "lucide-react";
+import { Plus, Edit, Trash2, Dumbbell, Check, Clock, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useForm } from "react-hook-form";
 import { formatCurrency } from "@/lib/utils";
+import { useGymSettings, useCurrencySymbol } from "@/lib/useGymSettings";
 
 interface Plan {
   _id: string;
@@ -53,18 +46,19 @@ type PlanForm = {
 export default function PlansPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role;
+  const { currency } = useGymSettings();
+  const currencySymbol = useCurrencySymbol();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [open, setOpen] = useState(false);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
-  const { register, handleSubmit, reset, setValue } = useForm<PlanForm>();
+  const { register, handleSubmit, reset } = useForm<PlanForm>();
 
   const fetchPlans = () =>
     fetch("/api/plans")
-      .then((r) => r.json())
-      .then((d) => setPlans(Array.isArray(d) ? d : d.plans || []));
-  useEffect(() => {
-    fetchPlans();
-  }, []);
+      .then(r => r.json())
+      .then(d => setPlans(Array.isArray(d) ? d : d.plans || []));
+
+  useEffect(() => { fetchPlans(); }, []);
 
   function openEdit(p: Plan) {
     setEditPlan(p);
@@ -81,14 +75,7 @@ export default function PlansPage() {
 
   function openNew() {
     setEditPlan(null);
-    reset({
-      name: "",
-      description: "",
-      durationDays: "30",
-      price: "",
-      features: "",
-      isActive: true,
-    });
+    reset({ name: "", description: "", durationDays: "30", price: "", features: "", isActive: true });
     setOpen(true);
   }
 
@@ -99,220 +86,262 @@ export default function PlansPage() {
       durationDays: Number(data.durationDays),
       price: Number(data.price),
       features: data.features
-        ? data.features.split(",").map((f) => f.trim()).filter(Boolean)
+        ? data.features.split(",").map(f => f.trim()).filter(Boolean)
         : [],
       isActive: data.isActive,
     };
     const res = await fetch(
       editPlan ? `/api/plans/${editPlan._id}` : "/api/plans",
-      {
-        method: editPlan ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
+      { method: editPlan ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
     );
     if (res.ok) {
       toast.success(editPlan ? "Plan updated!" : "Plan created!");
       setOpen(false);
       fetchPlans();
-    } else toast.error("Failed to save plan");
+    } else {
+      toast.error("Failed to save plan");
+    }
   }
 
   async function deletePlan(id: string) {
     const res = await fetch(`/api/plans/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      toast.success("Plan deleted");
-      fetchPlans();
-    } else toast.error("Failed to delete plan");
+    if (res.ok) { toast.success("Plan deleted"); fetchPlans(); }
+    else toast.error("Failed to delete plan");
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Membership Plans"
-        description={`${plans.length} plans configured`}
+        description={`${plans.length} plan${plans.length !== 1 ? "s" : ""} configured`}
         actions={
           role === "admin" ? (
             <Button onClick={openNew} className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Plan
+              <Plus className="h-4 w-4" /> New Plan
             </Button>
           ) : undefined
         }
       />
 
+      {/* ── Empty state ────────────────────────────────────────────────── */}
       {plans.length === 0 ? (
         <Card className="border-0 shadow-card">
-          <CardContent className="py-12">
-            <div className="flex flex-col items-center gap-3">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground">
-                <Dumbbell className="h-6 w-6" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-muted-foreground">No plans yet</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Create your first membership plan to get started
-                </p>
-              </div>
+          <CardContent className="py-16 flex flex-col items-center text-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Dumbbell className="h-7 w-7 text-primary" />
             </div>
+            <div>
+              <p className="font-medium">No plans yet</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Create your first membership plan to get started
+              </p>
+            </div>
+            {role === "admin" && (
+              <Button onClick={openNew} className="gap-2 mt-2">
+                <Plus className="h-4 w-4" /> Create First Plan
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {plans.map((plan, i) => (
-            <motion.div
-              key={plan._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <Card
-                className={`border-0 shadow-card hover:shadow-card-hover transition-all duration-300 ${
-                  !plan.isActive ? "opacity-60" : ""
-                }`}
+        /* ── Plan cards ──────────────────────────────────────────────── */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {plans.map((plan, i) => {
+            const perDay = plan.durationDays > 0
+              ? Math.round(plan.price / plan.durationDays)
+              : null;
+
+            return (
+              <motion.div
+                key={plan._id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06, type: "spring", stiffness: 300, damping: 24 }}
+                className={plan.isActive ? "" : "opacity-60"}
               >
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <CardTitle className="text-lg font-bold">
-                          {plan.name}
-                        </CardTitle>
-                        {!plan.isActive && (
-                          <Badge variant="secondary" className="text-xs">
-                            Inactive
-                          </Badge>
+                <Card className="border-0 shadow-card hover:shadow-card-hover transition-all duration-300 overflow-hidden flex flex-col h-full relative">
+                  {/* Decorative ambient glow */}
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />
+
+                  {/* Coloured top accent */}
+                  <div className="h-1 bg-gradient-to-r from-primary to-primary/60 shrink-0" />
+
+                  <CardContent className="p-6 flex flex-col gap-5 flex-1">
+                    {/* ── Header ──────────────────────────────── */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-lg leading-tight">{plan.name}</h3>
+                          {!plan.isActive && (
+                            <Badge variant="secondary" className="text-xs shrink-0">Inactive</Badge>
+                          )}
+                        </div>
+                        {plan.description && (
+                          <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
+                            {plan.description}
+                          </p>
                         )}
                       </div>
-                      {plan.description && (
-                        <p className="text-sm text-muted-foreground">
-                          {plan.description}
-                        </p>
-                      )}
+                      <div className="p-2.5 rounded-xl bg-primary/10 shrink-0">
+                        <Dumbbell className="h-4 w-4 text-primary" />
+                      </div>
                     </div>
-                    <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 shadow-lg shadow-orange-500/20">
-                      <Dumbbell className="h-4 w-4 text-white" />
+
+                    {/* ── Price ───────────────────────────────── */}
+                    <div>
+                      <p className="text-4xl font-bold tracking-tight">
+                        {formatCurrency(plan.price, currency)}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5 text-sm text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        <span>{plan.durationDays} days</span>
+                        {perDay !== null && (
+                          <>
+                            <span className="text-border">·</span>
+                            <Zap className="h-3.5 w-3.5 shrink-0" />
+                            <span>~{formatCurrency(perDay, currency)}/day</span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-3xl font-bold tracking-tight">
-                      {formatCurrency(plan.price)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {plan.durationDays} days
-                    </p>
-                  </div>
-                  {plan.features && plan.features.length > 0 && (
-                    <ul className="space-y-1.5">
-                      {plan.features.map((f, j) => (
-                        <li
-                          key={j}
-                          className="text-sm flex items-center gap-2 text-muted-foreground"
-                        >
-                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-600">
-                            <Check className="h-2.5 w-2.5" />
-                          </span>
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {role === "admin" && (
-                    <div className="flex gap-2 pt-2 border-t">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEdit(plan)}
-                        className="gap-1"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                        Edit
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
+
+                    {/* ── Features ────────────────────────────── */}
+                    {plan.features && plan.features.length > 0 && (
+                      <>
+                        <Separator />
+                        <ul className="space-y-2.5 flex-1">
+                          {plan.features.map((f, j) => (
+                            <li key={j} className="flex items-center gap-2.5 text-sm">
+                              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-success/10 shrink-0">
+                                <Check className="h-2.5 w-2.5 text-success" />
+                              </span>
+                              <span className="text-muted-foreground">{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+
+                    {/* ── Actions ─────────────────────────────── */}
+                    {role === "admin" && (
+                      <>
+                        <Separator className="mt-auto" />
+                        <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-destructive gap-1"
+                            className="flex-1 gap-1.5"
+                            onClick={() => openEdit(plan)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
+                            <Edit className="h-3.5 w-3.5" /> Edit
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Plan</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Delete "{plan.name}"? This cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              className="bg-destructive hover:bg-destructive/90"
-                              onClick={() => deletePlan(plan._id)}
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete "{plan.name}"?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently remove the plan. Members currently on this plan
+                                  won't be affected but won't be able to renew with it.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive hover:bg-destructive/90"
+                                  onClick={() => deletePlan(plan._id)}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
+      {/* ── Create / Edit Dialog ───────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editPlan ? "Edit Plan" : "New Membership Plan"}
-            </DialogTitle>
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col gap-0 p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+            <DialogTitle>{editPlan ? "Edit Plan" : "New Membership Plan"}</DialogTitle>
+            <DialogDescription>
+              {editPlan
+                ? "Update the plan details below."
+                : "Create a new membership plan for your gym."}
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Name *</Label>
-              <Input {...register("name", { required: true })} placeholder="Monthly" />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Input {...register("description")} placeholder="Brief description" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Duration (days) *</Label>
-                <Input
-                  type="number"
-                  {...register("durationDays", { required: true })}
-                />
+
+          <form
+            id="plan-form"
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex-1 flex flex-col min-h-0"
+          >
+            <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-2">
+              <div className="space-y-1.5">
+                <Label>Name <span className="text-destructive">*</span></Label>
+                <Input {...register("name", { required: true })} placeholder="e.g. Monthly, Quarterly" />
               </div>
-              <div className="space-y-2">
-                <Label>Price (₹) *</Label>
+
+              <div className="space-y-1.5">
+                <Label>Description</Label>
+                <Input {...register("description")} placeholder="Brief description of the plan" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Duration (days) <span className="text-destructive">*</span></Label>
+                  <Input type="number" min="1" {...register("durationDays", { required: true })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Price ({currencySymbol}) <span className="text-destructive">*</span></Label>
+                  <Input type="number" min="0" {...register("price", { required: true })} />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Features</Label>
                 <Input
-                  type="number"
-                  {...register("price", { required: true })}
+                  {...register("features")}
+                  placeholder="Locker room, General trainer, Pool access"
                 />
+                <p className="text-xs text-muted-foreground">Separate features with commas</p>
+              </div>
+
+              <div className="flex items-center gap-3 py-1">
+                <input
+                  id="plan-active"
+                  type="checkbox"
+                  {...register("isActive")}
+                  className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
+                />
+                <Label htmlFor="plan-active" className="cursor-pointer font-normal">
+                  Plan is active and available to members
+                </Label>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Features (comma-separated)</Label>
-              <Input
-                {...register("features")}
-                placeholder="Full gym access, Locker room"
-              />
-            </div>
-            <DialogFooter>
+
+            <DialogFooter className="px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                {editPlan ? "Update" : "Create"} Plan
+              <Button type="submit" form="plan-form">
+                {editPlan ? "Save Changes" : "Create Plan"}
               </Button>
             </DialogFooter>
           </form>

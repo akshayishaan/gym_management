@@ -6,7 +6,7 @@ export interface IStaff extends Document {
   name: string;
   email: string;
   password: string;
-  role: "superadmin" | "admin" | "receptionist" | "trainer";
+  role: string;
   isActive: boolean;
   lastLogin?: Date;
   createdAt: Date;
@@ -22,8 +22,8 @@ const StaffSchema = new Schema<IStaff>(
     gymIds: [{ type: Schema.Types.ObjectId, ref: "Gym", index: true }],
     role: {
       type: String,
-      enum: ["superadmin", "admin", "receptionist", "trainer"],
-      default: "receptionist",
+      enum: ["admin"],
+      default: "admin",
     },
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },

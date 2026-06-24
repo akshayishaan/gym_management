@@ -233,25 +233,25 @@ export default function DashboardPage() {
             <CardContent>
               {(data.expiringList?.length ?? 0) === 0 ? (
                 <div className="text-center py-8">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mb-3">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-success/10 text-success mb-3">
                     <Users className="h-6 w-6" />
                   </div>
-                  <p className="text-sm text-muted-foreground font-medium">No members expiring soon</p>
-                  <p className="text-xs text-muted-foreground mt-1">All memberships are up to date 🎉</p>
+                  <p className="text-sm font-medium">No members expiring soon</p>
+                  <p className="text-xs text-muted-foreground mt-1">All memberships are up to date</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-1">
                   {(data.expiringList ?? []).map((m) => {
                     const days = daysUntilExpiry(m.membershipExpiry);
                     const msg = reminderMessage(m.name, m.membershipExpiry);
                     return (
                       <div
                         key={m._id}
-                        className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors group"
+                        className="flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                          <Avatar className="h-8 w-8 shrink-0">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                               {getInitials(m.name)}
                             </AvatarFallback>
                           </Avatar>
@@ -277,7 +277,7 @@ export default function DashboardPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                              className="h-8 w-8 text-success hover:bg-success/10"
                               title="WhatsApp"
                             >
                               <MessageCircle className="h-3.5 w-3.5" />
@@ -287,7 +287,7 @@ export default function DashboardPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                              className="h-8 w-8 text-primary hover:bg-primary/10"
                               title="SMS"
                             >
                               <Phone className="h-3.5 w-3.5" />
@@ -329,7 +329,7 @@ export default function DashboardPage() {
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground mb-3">
                     <Wallet className="h-6 w-6" />
                   </div>
-                  <p className="text-sm text-muted-foreground font-medium">No payments yet</p>
+                  <p className="text-sm font-medium">No payments yet</p>
                   <p className="text-xs text-muted-foreground mt-1">Record your first payment to see it here</p>
                 </div>
               ) : (
@@ -340,8 +340,8 @@ export default function DashboardPage() {
                       className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Avatar className="h-9 w-9 border-2 border-background shadow-sm">
-                          <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-bold">
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarFallback className="bg-success/10 text-success text-xs font-semibold">
                             {getInitials(p.memberName)}
                           </AvatarFallback>
                         </Avatar>

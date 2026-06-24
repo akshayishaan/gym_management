@@ -5,31 +5,32 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Users, CreditCard, MessageCircle, BarChart3 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const actions = [
   {
     label: "Add Member",
     href: "/dashboard/members/new",
     icon: Users,
-    color: "bg-blue-500 hover:bg-blue-600",
+    iconClass: "bg-primary/10 text-primary",
   },
   {
     label: "Record Payment",
-    href: "/dashboard/payments/new",
+    href: "/dashboard/payments",
     icon: CreditCard,
-    color: "bg-emerald-500 hover:bg-emerald-600",
+    iconClass: "bg-success/10 text-success",
   },
   {
     label: "Send Reminders",
     href: "/dashboard/members?status=expiring",
     icon: MessageCircle,
-    color: "bg-amber-500 hover:bg-amber-600",
+    iconClass: "bg-warning/10 text-warning",
   },
   {
     label: "View Reports",
     href: "/dashboard/reports",
     icon: BarChart3,
-    color: "bg-violet-500 hover:bg-violet-600",
+    iconClass: "bg-muted text-muted-foreground",
   },
 ];
 
@@ -52,10 +53,10 @@ export function QuickActions() {
               >
                 <Link href={action.href}>
                   <Button
-                    variant="secondary"
-                    className="gap-2 h-10 px-4 bg-secondary hover:bg-secondary/80 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    variant="outline"
+                    className="gap-2 h-10 px-4"
                   >
-                    <div className={`p-1 rounded-md text-white ${action.color}`}>
+                    <div className={cn("p-1 rounded-md", action.iconClass)}>
                       <action.icon className="h-3.5 w-3.5" />
                     </div>
                     <span className="text-sm font-medium">{action.label}</span>
