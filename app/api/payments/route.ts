@@ -41,69 +41,103 @@ export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
   const gymId = user.selectedGymId!;
   const body = await req.json();
   const validated = paymentCreateSchema.parse(body);
-  const invoiceNumber = await generateInvoiceNumber();
 
+  // membershipStart is used to set the membership window — never stored on Payment.
+  const { membershipStart, ...paymentFields } = validated;
+
+  const member = await Member.findById(validated.memberId);
+  if (!member) {
+    return NextResponse.json({ error: "Member not found" }, { status: 404 });
+  }
+
+  const oldDue = member.dueAmount ?? 0;
+  const now = new Date();
+
+  // ── Resolve the plan (if any) and validate the amount against what's owed ──
+  let plan = null;
+  if (validated.planId) {
+    plan = await Plan.findById(validated.planId);
+    if (!plan) {
+      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+    }
+    // Cap: a plan payment can settle the plan price + any pre-existing dues.
+    if (validated.amount > plan.price + oldDue) {
+      return NextResponse.json(
+        { error: "Amount exceeds total owed (plan price + outstanding dues)." },
+        { status: 400 }
+      );
+    }
+  } else {
+    // No plan = clearing dues. Block meaningless advance payments.
+    if (oldDue <= 0) {
+      return NextResponse.json(
+        { error: "No outstanding dues. Select a plan to record a payment." },
+        { status: 400 }
+      );
+    }
+    if (validated.amount > oldDue) {
+      return NextResponse.json(
+        { error: "Amount exceeds outstanding dues." },
+        { status: 400 }
+      );
+    }
+  }
+
+  const invoiceNumber = await generateInvoiceNumber();
   const payment = await Payment.create({
-    ...validated,
+    ...paymentFields,
     gymId,
     invoiceNumber,
     createdBy: user.id,
   });
 
-  // Always fetch the member upfront so we can update dueAmount regardless
-  // of whether a plan was selected.
-  const member = await Member.findById(validated.memberId);
-
   let renewedUntil: Date | null = null;
-  let planCost = 0;
 
-  // ── Renew membership when a plan is selected ───────────────────────────────
-  if (validated.planId && member) {
-    const plan = await Plan.findById(validated.planId);
+  if (plan) {
+    // ── Buy / renew a membership ────────────────────────────────────────────
+    // Start from the explicit date if provided; otherwise stack from the
+    // current expiry while the member is still active, else start today.
+    const isActive = member.membershipExpiry && member.membershipExpiry > now;
+    const renewFrom: Date = membershipStart
+      ? new Date(membershipStart)
+      : isActive
+      ? member.membershipExpiry!
+      : now;
 
-    if (plan) {
-      planCost = plan.price;
-      const paymentDate = validated.paidAt ? new Date(validated.paidAt) : new Date();
-      const now = new Date();
+    renewedUntil = new Date(renewFrom);
+    renewedUntil.setDate(renewedUntil.getDate() + plan.durationDays);
 
-      // Stack from current expiry if still active; otherwise start fresh.
-      const isActive = member.membershipExpiry && member.membershipExpiry > now;
-      const renewFrom: Date = isActive ? member.membershipExpiry! : paymentDate;
+    // New ledger balance: add the plan price, subtract what was just paid.
+    const newDue = Math.max(0, oldDue + plan.price - validated.amount);
 
-      renewedUntil = new Date(renewFrom);
-      renewedUntil.setDate(renewedUntil.getDate() + plan.durationDays);
+    await Member.findByIdAndUpdate(validated.memberId, {
+      planId: plan._id,
+      planName: plan.name,
+      membershipStart: renewFrom,
+      membershipExpiry: renewedUntil,
+      dueAmount: newDue,
+    });
 
-      // Compute new dueAmount: add plan cost, subtract what was paid.
-      const newDue = Math.max(0, (member.dueAmount ?? 0) + planCost - validated.amount);
-
-      await Member.findByIdAndUpdate(validated.memberId, {
+    // Append to membership history.
+    try {
+      await Membership.create({
+        gymId,
+        memberId: validated.memberId,
         planId: plan._id,
         planName: plan.name,
-        membershipStart: renewFrom,
-        membershipExpiry: renewedUntil,
-        dueAmount: newDue,
+        startDate: renewFrom,
+        expiryDate: renewedUntil,
+        paymentId: payment._id,
+        planPrice: plan.price,
+        amount: validated.amount,
+        grantedBy: user.id,
       });
-
-      // Append to Membership history.
-      try {
-        await Membership.create({
-          gymId,
-          memberId: validated.memberId,
-          planId: plan._id,
-          planName: plan.name,
-          startDate: renewFrom,
-          expiryDate: renewedUntil,
-          paymentId: payment._id,
-          amount: validated.amount,
-          grantedBy: user.id,
-        });
-      } catch (membershipErr) {
-        console.error("[payments] Failed to create Membership record:", membershipErr);
-      }
+    } catch (membershipErr) {
+      console.error("[payments] Failed to create Membership record:", membershipErr);
     }
-  } else if (member) {
-    // ── Partial / non-plan payment: only reduce dueAmount ─────────────────
-    const newDue = Math.max(0, (member.dueAmount ?? 0) - validated.amount);
+  } else {
+    // ── Clear dues only ─────────────────────────────────────────────────────
+    const newDue = Math.max(0, oldDue - validated.amount);
     await Member.findByIdAndUpdate(validated.memberId, { dueAmount: newDue });
   }
 
@@ -115,7 +149,7 @@ export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
     entity: "payment",
     entityId: payment._id.toString(),
     details: renewedUntil
-      ? `Recorded payment of ${payment.amount} for ${payment.memberName} (${invoiceNumber}). Membership renewed until ${renewedUntil.toDateString()}.`
+      ? `Recorded payment of ${payment.amount} for ${payment.memberName} (${invoiceNumber}). Membership active until ${renewedUntil.toDateString()}.`
       : `Recorded payment of ${payment.amount} for ${payment.memberName} (${invoiceNumber}).`,
   });
 

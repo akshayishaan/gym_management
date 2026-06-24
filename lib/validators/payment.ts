@@ -9,6 +9,9 @@ export const paymentCreateSchema = z.object({
   method: z.enum(["cash", "card", "upi", "bank_transfer", "other"]),
   status: z.enum(["paid", "pending", "refunded"]).default("paid"),
   paidAt: z.string().optional(),
+  // Membership period start (yyyy-MM-dd). Used to set the Member's membership
+  // window and the Membership history record — NOT stored on the Payment doc.
+  membershipStart: z.string().optional(),
   notes: z.string().max(1000).optional(),
 });
 

@@ -252,7 +252,7 @@ export default function PaymentsPage() {
                           {formatDate(p.paidAt)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
+                          <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 size="icon"

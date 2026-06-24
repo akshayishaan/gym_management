@@ -9,18 +9,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DatePicker } from "@/components/ui/date-picker";
+import { PaymentBreakdown } from "@/components/dashboard/PaymentBreakdown";
 import { toast } from "sonner";
 import { useCurrencySymbol, useGymSettings } from "@/lib/useGymSettings";
 import { formatCurrency } from "@/lib/utils";
 import { format, addDays } from "date-fns";
 import { Search } from "lucide-react";
-import { DatePicker } from "@/components/ui/date-picker";
 
-interface Member { _id: string; name: string; phone: string; planName?: string; }
+interface Member {
+  _id: string;
+  name: string;
+  phone?: string;
+  planName?: string;
+  dueAmount?: number;
+  membershipExpiry?: string;
+}
 interface Plan { _id: string; name: string; price: number; durationDays: number; }
 
 const METHODS = [
@@ -35,7 +44,7 @@ const DEFAULT_FORM = {
   memberId: "", memberName: "",
   planId: "", planName: "",
   amount: "", method: "cash",
-  paidAt: "", notes: "",
+  membershipStart: "", notes: "",
 };
 
 function getInitials(name: string) {
@@ -62,6 +71,10 @@ export function PaymentFormDialog({
   const [form, setForm] = useState({ ...DEFAULT_FORM });
   const [saving, setSaving] = useState(false);
 
+  // Current member's ledger/membership context (drives all the conditional logic)
+  const [selectedDue, setSelectedDue] = useState(0);
+  const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null);
+
   const isMemberLocked = !!prefillMemberId;
 
   // Reset form on open
@@ -71,15 +84,32 @@ export function PaymentFormDialog({
       ...DEFAULT_FORM,
       memberId: prefillMemberId || "",
       memberName: prefillMemberName || "",
-      paidAt: format(new Date(), "yyyy-MM-dd"),
     });
     setMemberSearch("");
+    setSelectedDue(0);
+    setSelectedExpiry(null);
   }, [open, prefillMemberId, prefillMemberName]);
 
   // Fetch plans once
   useEffect(() => {
     fetch("/api/plans").then(r => r.json()).then(d => setPlans(Array.isArray(d) ? d : d.plans || []));
   }, []);
+
+  // Fetch the full member record (due + expiry) once a member is chosen / locked
+  const loadMemberContext = useCallback((id: string) => {
+    fetch(`/api/members/${id}`)
+      .then(r => r.json())
+      .then((m) => {
+        setSelectedDue(m?.dueAmount ?? 0);
+        setSelectedExpiry(m?.membershipExpiry ?? null);
+      })
+      .catch(() => { setSelectedDue(0); setSelectedExpiry(null); });
+  }, []);
+
+  // Locked (prefill) member — load context on open
+  useEffect(() => {
+    if (open && isMemberLocked && prefillMemberId) loadMemberContext(prefillMemberId);
+  }, [open, isMemberLocked, prefillMemberId, loadMemberContext]);
 
   // Fetch members (debounced by search) — only when member is not pre-filled
   const fetchMembers = useCallback(() => {
@@ -97,13 +127,26 @@ export function PaymentFormDialog({
     return () => clearTimeout(t);
   }, [open, fetchMembers, isMemberLocked]);
 
-  // Auto-fill amount from selected plan
+  const selectedPlan = plans.find(p => p._id === form.planId);
+
+  // Smart default for membership start: stack from current expiry while active,
+  // otherwise start today.
+  const today = format(new Date(), "yyyy-MM-dd");
+  const isActive = !!selectedExpiry && new Date(selectedExpiry) > new Date();
+  const defaultStart = isActive ? format(new Date(selectedExpiry!), "yyyy-MM-dd") : today;
+
+  // When a plan is (de)selected, seed the start date + amount.
   useEffect(() => {
-    const plan = plans.find(p => p._id === form.planId);
-    if (plan) {
-      setForm(f => ({ ...f, amount: String(plan.price), planName: plan.name }));
+    if (selectedPlan) {
+      setForm(f => ({
+        ...f,
+        planName: selectedPlan.name,
+        membershipStart: f.membershipStart || defaultStart,
+        amount: String(selectedPlan.price + selectedDue),
+      }));
     }
-  }, [form.planId, plans]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlan?._id, selectedDue]);
 
   function setField(key: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -113,17 +156,46 @@ export function PaymentFormDialog({
   function selectMember(member: Member) {
     setForm(f => ({ ...f, memberId: member._id, memberName: member.name }));
     setMemberSearch("");
+    setSelectedDue(member.dueAmount ?? 0);
+    setSelectedExpiry(member.membershipExpiry ?? null);
   }
 
-  const selectedMember = isMemberLocked
+  function clearMember() {
+    setForm(f => ({ ...DEFAULT_FORM, planId: "", planName: "" }));
+    setSelectedDue(0);
+    setSelectedExpiry(null);
+  }
+
+  function clearPlan() {
+    setForm(f => ({ ...f, planId: "", planName: "", membershipStart: "", amount: "" }));
+  }
+
+  const selectedMember: Member | undefined = isMemberLocked
     ? { _id: prefillMemberId!, name: prefillMemberName! }
     : members.find(m => m._id === form.memberId);
+
+  // ── Derived amounts ─────────────────────────────────────────────────────────
+  const amountNum = parseFloat(form.amount) || 0;
+  const planPrice = selectedPlan?.price ?? 0;
+  const totalOwed = selectedPlan ? planPrice + selectedDue : selectedDue;
+  const validUntil =
+    selectedPlan && form.membershipStart
+      ? addDays(new Date(form.membershipStart), selectedPlan.durationDays)
+      : null;
+
+  const hasMember = !!form.memberId;
+  // No-plan + no-dues → nothing to record
+  const blockedNoDues = hasMember && !selectedPlan && selectedDue <= 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.memberId) { toast.error("Please select a member"); return; }
-    if (!form.memberName) { toast.error("Member name is required"); return; }
-    if (!form.amount || Number(form.amount) <= 0) { toast.error("Enter a valid amount"); return; }
+    if (blockedNoDues) { toast.error("No outstanding dues. Select a plan to record a payment."); return; }
+    if (!form.amount || amountNum <= 0) { toast.error("Enter a valid amount"); return; }
+    if (amountNum > totalOwed) {
+      toast.error(selectedPlan ? "Amount exceeds total owed" : "Amount exceeds outstanding dues");
+      return;
+    }
     if (!form.method) { toast.error("Select a payment method"); return; }
 
     setSaving(true);
@@ -136,9 +208,10 @@ export function PaymentFormDialog({
           memberName: form.memberName,
           planId: form.planId || undefined,
           planName: form.planName || undefined,
-          amount: Number(form.amount),
+          amount: amountNum,
           method: form.method,
-          paidAt: form.paidAt || undefined,
+          paidAt: new Date().toISOString(),
+          membershipStart: selectedPlan ? form.membershipStart || undefined : undefined,
           notes: form.notes || undefined,
         }),
       });
@@ -156,14 +229,14 @@ export function PaymentFormDialog({
     }
   }
 
-  const selectedPlan = plans.find(p => p._id === form.planId);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle>Record Payment</DialogTitle>
-          <DialogDescription>Add a new payment entry for a gym member.</DialogDescription>
+          <DialogDescription>
+            Clear outstanding dues, or select a plan to start / renew a membership.
+          </DialogDescription>
         </DialogHeader>
 
         <form id="payment-form" onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
@@ -173,7 +246,6 @@ export function PaymentFormDialog({
             <div className="space-y-1.5">
               <Label>Member <span className="text-destructive">*</span></Label>
               {isMemberLocked ? (
-                /* Locked — came from member detail page */
                 <div className="flex items-center gap-3 px-3 py-2 rounded-md border border-input bg-muted/50">
                   <Avatar className="h-7 w-7 shrink-0">
                     <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -183,20 +255,9 @@ export function PaymentFormDialog({
                   <span className="text-sm font-medium">{prefillMemberName}</span>
                 </div>
               ) : (
-                /* Searchable member picker */
                 <div className="space-y-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                    <Input
-                      placeholder="Search members…"
-                      className="pl-9"
-                      value={memberSearch}
-                      onChange={e => setMemberSearch(e.target.value)}
-                    />
-                  </div>
-
                   {/* Selected member chip */}
-                  {selectedMember && !memberSearch && (
+                  {selectedMember && form.memberId ? (
                     <div className="flex items-center gap-2.5 px-3 py-2 rounded-md border border-primary/40 bg-primary/5">
                       <Avatar className="h-6 w-6 shrink-0">
                         <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
@@ -207,127 +268,210 @@ export function PaymentFormDialog({
                       <button
                         type="button"
                         className="text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => setForm(f => ({ ...f, memberId: "", memberName: "" }))}
+                        onClick={clearMember}
                       >
                         Change
                       </button>
                     </div>
-                  )}
-
-                  {/* Members list */}
-                  {(memberSearch || !form.memberId) && members.length > 0 && (
-                    <div className="border rounded-md divide-y max-h-40 overflow-y-auto">
-                      {members.map(m => (
-                        <button
-                          key={m._id}
-                          type="button"
-                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/50 transition-colors text-left"
-                          onClick={() => selectMember(m)}
-                        >
-                          <Avatar className="h-6 w-6 shrink-0">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                              {getInitials(m.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{m.name}</p>
-                            {m.phone && <p className="text-xs text-muted-foreground">{m.phone}</p>}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {!form.memberId && !memberSearch && members.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      Start typing to search members
-                    </p>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          placeholder="Search members…"
+                          className="pl-9"
+                          value={memberSearch}
+                          onChange={e => setMemberSearch(e.target.value)}
+                        />
+                      </div>
+                      {members.length > 0 ? (
+                        <div className="border rounded-md divide-y max-h-40 overflow-y-auto">
+                          {members.map(m => (
+                            <button
+                              key={m._id}
+                              type="button"
+                              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-muted/50 transition-colors text-left"
+                              onClick={() => selectMember(m)}
+                            >
+                              <Avatar className="h-6 w-6 shrink-0">
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                  {getInitials(m.name)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">{m.name}</p>
+                                {m.phone && <p className="text-xs text-muted-foreground">{m.phone}</p>}
+                              </div>
+                              {(m.dueAmount ?? 0) > 0 && (
+                                <Badge variant="warning" className="text-xs shrink-0">
+                                  {formatCurrency(m.dueAmount!, currency)} due
+                                </Badge>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground text-center py-2">
+                          Start typing to search members
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
             </div>
 
-            <Separator />
+            {hasMember && (
+              <>
+                <Separator />
 
-            {/* ── Plan (optional) ────────────────────────────────── */}
-            <div className="space-y-1.5">
-              <Label>Membership Plan <span className="text-xs text-muted-foreground font-normal">(optional)</span></Label>
-              <Select
-                value={form.planId}
-                onValueChange={v => setForm(f => ({ ...f, planId: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select plan — auto-fills amount" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map(p => (
-                    <SelectItem key={p._id} value={p._id}>
-                      {p.name} — {formatCurrency(p.price, currency)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedPlan && (() => {
-                const paymentDate = form.paidAt ? new Date(form.paidAt) : new Date();
-                const renewedUntil = addDays(paymentDate, selectedPlan.durationDays);
-                return (
-                  <p className="text-xs text-success font-medium">
-                    ✓ Membership will be renewed until {format(renewedUntil, "dd MMM yyyy")}
-                  </p>
-                );
-              })()}
-            </div>
+                {/* ── Plan (optional) ──────────────────────────────── */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>
+                      Membership Plan{" "}
+                      <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    {selectedPlan && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={clearPlan}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <Select
+                    value={form.planId}
+                    onValueChange={v => setForm(f => ({ ...f, planId: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="No plan — clear dues only" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map(p => (
+                        <SelectItem key={p._id} value={p._id}>
+                          {p.name} — {formatCurrency(p.price, currency)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {/* ── Amount ─────────────────────────────────────────── */}
-            <div className="space-y-1.5">
-              <Label htmlFor="pf-amount">
-                Amount ({currencySymbol}) <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="pf-amount"
-                type="number"
-                min="0"
-                placeholder="0"
-                value={form.amount}
-                onChange={setField("amount")}
-              />
-            </div>
+                {/* ── PLAN PATH ────────────────────────────────────── */}
+                {selectedPlan ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>Membership Start Date</Label>
+                      <DatePicker
+                        value={form.membershipStart}
+                        onChange={v => setForm(f => ({ ...f, membershipStart: v }))}
+                        placeholder="Select start date"
+                      />
+                      {validUntil && (
+                        <p className="text-xs text-success font-medium">
+                          ✓ Active from {form.membershipStart ? format(new Date(form.membershipStart), "dd MMM yyyy") : "—"} until {format(validUntil, "dd MMM yyyy")}
+                          {isActive && " (stacks after current plan)"}
+                        </p>
+                      )}
+                    </div>
 
-            {/* ── Method + Date ───────────────────────────────────── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Method <span className="text-destructive">*</span></Label>
-                <Select
-                  value={form.method}
-                  onValueChange={v => setForm(f => ({ ...f, method: v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {METHODS.map(m => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Date <span className="text-destructive">*</span></Label>
-                <DatePicker
-                  value={form.paidAt}
-                  onChange={v => setForm(f => ({ ...f, paidAt: v }))}
-                  placeholder="Select date"
-                />
-              </div>
-            </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pf-amount">
+                        Amount ({currencySymbol}) <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="pf-amount"
+                        type="number"
+                        min="0"
+                        max={totalOwed}
+                        placeholder="0"
+                        value={form.amount}
+                        onChange={setField("amount")}
+                      />
+                    </div>
 
-            {/* ── Notes ──────────────────────────────────────────── */}
-            <div className="space-y-1.5 pb-2">
-              <Label htmlFor="pf-notes">Notes</Label>
-              <Input
-                id="pf-notes"
-                placeholder="Any additional notes…"
-                value={form.notes}
-                onChange={setField("notes")}
-              />
-            </div>
+                    {/* Due breakdown card */}
+                    <PaymentBreakdown
+                      items={[
+                        ...(selectedDue > 0 ? [{ label: "Previous due", value: selectedDue }] : []),
+                        { label: "Plan price", value: planPrice },
+                      ]}
+                      amountPaid={amountNum}
+                      currency={currency}
+                    />
+                  </>
+                ) : (
+                  /* ── NO-PLAN PATH (clear dues) ──────────────────── */
+                  <>
+                    {selectedDue > 0 ? (
+                      <>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="pf-amount">
+                            Amount ({currencySymbol}) <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            id="pf-amount"
+                            type="number"
+                            min="0"
+                            max={selectedDue}
+                            placeholder="0"
+                            value={form.amount}
+                            onChange={setField("amount")}
+                          />
+                        </div>
+
+                        <PaymentBreakdown
+                          items={[{ label: "Outstanding dues", value: selectedDue }]}
+                          amountPaid={amountNum}
+                          currency={currency}
+                          balanceLabel="Remaining due"
+                          settledLabel="Cleared"
+                        />
+                      </>
+                    ) : (
+                      <div className="rounded-lg bg-muted/50 border px-4 py-6 text-center text-sm">
+                        <p className="font-medium">No outstanding dues</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Select a plan above to start or renew a membership.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* ── Method + Notes (hidden when nothing to record) ── */}
+                {!blockedNoDues && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>Method <span className="text-destructive">*</span></Label>
+                      <Select
+                        value={form.method}
+                        onValueChange={v => setForm(f => ({ ...f, method: v }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {METHODS.map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1.5 pb-2">
+                      <Label htmlFor="pf-notes">Notes</Label>
+                      <Input
+                        id="pf-notes"
+                        placeholder="Any additional notes…"
+                        value={form.notes}
+                        onChange={setField("notes")}
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </form>
 
@@ -335,7 +479,7 @@ export function PaymentFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form="payment-form" disabled={saving}>
+          <Button type="submit" form="payment-form" disabled={saving || !hasMember || blockedNoDues}>
             {saving ? "Recording…" : "Record Payment"}
           </Button>
         </DialogFooter>

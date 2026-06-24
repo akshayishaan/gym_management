@@ -140,6 +140,7 @@ export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
         startDate: membershipStart,
         expiryDate: membershipExpiry,
         paymentId: createdPayment ? (createdPayment._id as string) : undefined,
+        planPrice: planDoc.price,
         amount: typeof validated.amountPaid === "number" ? validated.amountPaid : undefined,
         grantedBy: user.id,
       });

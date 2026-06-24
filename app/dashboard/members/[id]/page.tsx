@@ -37,8 +37,10 @@ interface Membership {
   planName: string;
   startDate: string;
   expiryDate: string;
+  planPrice?: number;
   amount?: number;
   paymentId?: string;
+  createdAt?: string;
 }
 
 const statusVariant = {
@@ -304,9 +306,10 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Plan</TableHead>
+                      <TableHead>Purchased</TableHead>
                       <TableHead>Period</TableHead>
                       <TableHead>Duration</TableHead>
-                      <TableHead>Amount</TableHead>
+                      <TableHead>Plan Price</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -323,14 +326,17 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
                         <TableRow key={ms._id}>
                           <TableCell className="font-medium">{ms.planName}</TableCell>
                           <TableCell className="text-muted-foreground whitespace-nowrap">
+                            {ms.createdAt ? formatDate(ms.createdAt) : "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground whitespace-nowrap">
                             {formatDate(ms.startDate)} – {formatDate(ms.expiryDate)}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {durationDays} day{durationDays !== 1 ? "s" : ""}
                           </TableCell>
                           <TableCell>
-                            {ms.amount != null
-                              ? <span className="font-semibold">{formatCurrency(ms.amount, currency)}</span>
+                            {(ms.planPrice ?? ms.amount) != null
+                              ? <span className="font-semibold">{formatCurrency((ms.planPrice ?? ms.amount)!, currency)}</span>
                               : <span className="text-muted-foreground">—</span>}
                           </TableCell>
                           <TableCell>

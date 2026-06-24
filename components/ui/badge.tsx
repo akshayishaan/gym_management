@@ -8,7 +8,7 @@ const Badge = React.forwardRef<
   const variants = {
     default: "bg-primary text-primary-foreground hover:bg-primary/80",
     secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-    destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/80",
+    destructive: "bg-red-100 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
     outline: "text-foreground border border-input",
     success: "bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800",
     warning: "bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800",

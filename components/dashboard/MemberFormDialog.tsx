@@ -20,12 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
+import { PaymentBreakdown } from "@/components/dashboard/PaymentBreakdown";
 import { toast } from "sonner";
 import { useCurrencySymbol, useGymSettings } from "@/lib/useGymSettings";
 import { addDays, format } from "date-fns";
-import { formatCurrency } from "@/lib/utils";
 
 interface Plan { _id: string; name: string; durationDays: number; price: number; }
 
@@ -347,26 +346,11 @@ export function MemberFormDialog({
                       </div>
                     </div>
 
-                    <div className="rounded-lg bg-muted/50 border px-4 py-3 flex items-center justify-between text-sm">
-                      <div className="space-y-0.5">
-                        <p className="text-muted-foreground text-xs">Plan price</p>
-                        <p className="font-medium">{formatCurrency(selectedPlan.price, currency)}</p>
-                      </div>
-                      <div className="space-y-0.5 text-right">
-                        <p className="text-muted-foreground text-xs">Amount paid</p>
-                        <p className="font-medium">{formatCurrency(amountPaidNum, currency)}</p>
-                      </div>
-                      <div className="space-y-0.5 text-right">
-                        <p className="text-muted-foreground text-xs">Due after</p>
-                        {dueAmount > 0 ? (
-                          <Badge variant="warning" className="font-semibold">
-                            {formatCurrency(dueAmount, currency)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="success" className="font-semibold">Paid in full</Badge>
-                        )}
-                      </div>
-                    </div>
+                    <PaymentBreakdown
+                      items={[{ label: "Plan price", value: selectedPlan.price }]}
+                      amountPaid={amountPaidNum}
+                      currency={currency}
+                    />
                   </>
                 )}
               </>

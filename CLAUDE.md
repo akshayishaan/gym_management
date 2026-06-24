@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Multi-tenant gym management SaaS built with **Next.js 15 (App Router) + React 19 + MongoDB/Mongoose + NextAuth v4**. One deployment serves many gyms; staff accounts can belong to multiple gyms and switch between them. Requires **Node >= 24**.
+Multi-tenant gym management SaaS built with **Next.js 15 (App Router) + React 19 + MongoDB/Mongoose + NextAuth v4**. One deployment serves many gyms; a staff account can belong to multiple gyms and switch between them. Requires **Node >= 24**.
 
 ## Commands
 
@@ -12,10 +12,12 @@ Multi-tenant gym management SaaS built with **Next.js 15 (App Router) + React 19
 npm run dev      # next dev (localhost:3000)
 npm run build    # next build (output: standalone)
 npm run lint     # next lint (eslint-config-next)
-npm run seed     # tsx scripts/seed.ts — creates superadmin + admin accounts
+npm run seed     # tsx scripts/seed.ts — creates the seed admin account + gym
 ```
 
 There is **no test runner configured**. Type-checking happens via `npm run build` (or `tsc --noEmit`).
+
+**Schema changes need a dev-server restart.** Models use the `mongoose.models.X || mongoose.model(...)` guard, so an already-running `next dev` process keeps the *old* compiled schema after you edit a model file. New fields silently won't persist until the process is restarted.
 
 **Docker:** `docker-compose up` brings up `app`, `mongo:7`, and a one-shot `seed` service. Env vars: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, plus `SEED_*` for the seed script (see `.env.example`).
 
@@ -25,13 +27,13 @@ Path alias: `@/*` maps to the repo root.
 
 ## Multi-Tenancy — the central concept
 
-Every data model (`Member`, `Payment`, `Plan`, `ActivityLog`) carries a `gymId` and **every query must be gym-scoped**. Getting this wrong leaks data across tenants. The mechanism:
+Every gym-scoped model (`Member`, `Payment`, `Plan`, `Membership`, `ActivityLog`) carries a `gymId`, and **every query must be gym-scoped**. Getting this wrong leaks data across tenants. The mechanism:
 
-- **Roles** (`lib/session.ts`): `superadmin | admin | receptionist | trainer`. A `superadmin` has no fixed gym and is **read-only on gym data**; the other roles are scoped to the gyms in their `Staff.gymIds[]` array.
-- **Active gym** is stored in the `selectedGymId` cookie. The cookie is **not httpOnly** — intentionally JS-readable. It is written client-side via `lib/gymCookie.ts` (`setGymCookie()`) and read server-side via `lib/selectedGym.ts` (`getSelectedGymId()`). On first visit, `GymSettingsProvider` initializes the cookie from `/api/settings` if none exists; `getSelectedGymId()` falls back to `user.gymIds[0]` when the cookie is absent or invalid. The middleware does **not** set the cookie.
+- **Roles** (`lib/session.ts`): `SessionUser.role` is currently a plain string that is effectively always `"admin"` ("kept for future extensibility"). The old `superadmin | receptionist | trainer` roles and the superadmin/staff UIs have been **removed** — a few vestigial `role === "superadmin"` client checks remain (`app/dashboard/page.tsx`, `lib/hooks/useGyms.ts`) but are dead paths. Don't build new role logic without confirming intent.
+- **Active gym** is stored in the `selectedGymId` cookie. The cookie is **not httpOnly** — intentionally JS-readable. It is written client-side via `lib/gymCookie.ts` (`setGymCookie()`) and read server-side via `lib/selectedGym.ts` (`getSelectedGymId()`). On first visit, `GymSettingsProvider` initializes it from `/api/settings`; `getSelectedGymId()` falls back to `user.gymIds[0]` when the cookie is absent or invalid. The middleware does **not** set the cookie.
 - `apiHandler` injects the validated `selectedGymId` onto the `SessionUser` before your handler runs.
-- **`getGymFilter(user, gymIdParam?)`** in `lib/withAuth.ts` is the canonical way to build the Mongo filter. It returns `{ gymId }` for scoped users (validating the gym is in their `gymIds`) and `{}` (or `{ gymId: param }`) for superadmins. **Always spread it into list queries**: `const query = { ...getGymFilter(user, gymIdParam) }`.
-- **`gymIds` are NOT stored in the JWT.** They are hydrated fresh from the DB on every request inside `requireAuth()`. This ensures that adding/removing a staff member from a gym takes effect immediately without requiring a new login.
+- **`getGymFilter(user)`** (`lib/withAuth.ts`) is the canonical way to build the Mongo filter — it returns `{ gymId }` for the user's active gym (validating it is in their `gymIds`). **Always spread it into queries**: `const query = { ...getGymFilter(user) }`.
+- **`gymIds` are NOT stored in the JWT.** They are hydrated fresh from the DB on every request inside `requireAuth()`, so adding/removing a staff member from a gym takes effect immediately without a new login.
 
 ## API route pattern
 
@@ -42,78 +44,78 @@ export const GET = apiHandler(async (req, user) => { ... });
 export const PUT = apiHandlerWithParams(async (req, user, { id }) => { ... });
 ```
 
-The wrapper handles auth (`requireAuth` → 401), injects `selectedGymId`, and centralizes error translation: `AuthError`→401, `ForbiddenError`→403, `ZodError`→422, Mongoose duplicate-key→409, ValidationError→422, CastError→400. **Throw these errors rather than building error responses by hand.**
+The wrapper handles auth (`requireAuth` → 401), injects `selectedGymId`, and centralizes error translation: `AuthError`→401, `ForbiddenError`→403, `ZodError`→422, Mongoose duplicate-key→409, ValidationError→422, CastError→400. **Throw `AuthError`/`ForbiddenError` (from `lib/withAuth.ts`) rather than building error responses by hand.** For domain validation (e.g. "amount exceeds dues") return `NextResponse.json({ error }, { status: 400 })` directly — see `app/api/payments/route.ts`.
 
-Authorization helpers (also `lib/withAuth.ts`), called inside handlers:
-- `requireRole(user, ...roles)` / `requireSuperAdmin` / `requireNotSuperAdmin` — enforce who can act. Mutations on gym data typically call `requireNotSuperAdmin(user)` since superadmins are read-only.
-- `requireSuperAdminOrRole(user, ...roles)` — the correct "superadmin OR role X" check (replaces a known buggy `isSuperAdmin || role !== "admin"` pattern; don't reintroduce it).
+`lib/withAuth.ts` exports only `requireAuth`, `getGymFilter`, and the two error classes. The old `requireRole` / `requireSuperAdmin` / `requireNotSuperAdmin` helpers have been removed.
 
 **Request bodies are validated with Zod** schemas in `lib/validators/*` (`.parse(body)` — the thrown `ZodError` becomes a 422 automatically). `lib/validators/index.ts` re-exports all types.
 
-**List endpoints** share a convention: read `search`, `status`, `page`, `limit` (and `gymId` for superadmins) off `searchParams`, build `query` by spreading `getGymFilter(user, gymIdParam)`, run reads with `.lean()`, and return `{ <items>, total, page, limit }`. See `app/api/members/route.ts` as the reference.
+**List endpoints** share a convention: read `search`, `status`, `page`, `limit` off `searchParams`, build `query` by spreading `getGymFilter(user)`, run reads with `.lean()`, and return `{ <items>, total, page, limit }`. See `app/api/members/route.ts` as the reference.
 
-**Mutations must write an `ActivityLog`** entry (gymId, staffId, staffName, action, entity, entityId, details) — this is the audit trail and is done inline in each route after the DB write.
+**Mutations must write an `ActivityLog`** entry (gymId, staffId, staffName, action, entity, entityId, details) — the audit trail, done inline in each route after the DB write.
 
 ### API surface
 
 | Route | Methods | Purpose |
 |-------|---------|---------|
-| `/api/gyms` | GET, POST | List user's gyms; create gym (admin or superadmin) |
+| `/api/gyms` | GET, POST | List user's gyms; create gym |
 | `/api/gyms/[id]` | GET, PUT, DELETE | View/edit/delete gym (DELETE cascades) |
-| `/api/members` | GET, POST | List members (search/status/page); create member |
+| `/api/members` | GET, POST | List members (search/status/page); create member (may seed a plan + initial payment) |
 | `/api/members/[id]` | GET, PUT, DELETE | Member CRUD |
-| `/api/payments` | GET, POST | List payments (month filter); record payment (generates invoice) |
+| `/api/payments` | GET, POST | List payments (month filter); **record payment — see business logic below** |
 | `/api/payments/[id]` | GET, DELETE | Get/delete payment |
+| `/api/memberships` | GET | Membership history for a member (`?memberId=`), newest period first |
 | `/api/plans` | GET, POST | List plans; create plan |
 | `/api/plans/[id]` | GET, PUT, DELETE | Plan CRUD |
-| `/api/staff` | GET, POST | List staff; create staff |
-| `/api/staff/[id]` | GET, PUT, DELETE | Staff CRUD |
 | `/api/dashboard` | GET | Stats: total members, revenue, expiring list |
 | `/api/reports` | GET | Yearly analytics: monthly revenue, members, plan distribution |
 | `/api/settings` | GET, PUT | Fetch/update gym settings (name, color, currency) |
 | `/api/activity` | GET | Activity log for gym |
 
+## Payments, dues & membership renewal — core business logic
+
+`POST /api/payments` is the **single source of truth** for membership state. Read it before touching anything payment-related. Two distinct flows depending on whether a `planId` is supplied:
+
+- **Plan selected → buy / renew a membership.** The handler computes the membership window and writes it across three places:
+  - `renewFrom` = the supplied `membershipStart`, else (if the member is still active, i.e. `membershipExpiry > now`) the **current expiry** so renewals *stack and never lose days*, else `now`. `renewedUntil = renewFrom + plan.durationDays`.
+  - Updates the **Member**: `planId`, `planName`, `membershipStart`, `membershipExpiry`, and `dueAmount = max(0, oldDue + plan.price - amountPaid)`.
+  - Creates an immutable **Membership** history record (`planPrice` snapshot, `planName`, `startDate`, `expiryDate`, `amount` paid, `paymentId`).
+  - Amount cap = `plan.price + existing dues` (one payment can settle the plan and old dues together). Partial payment is allowed and increases `dueAmount`.
+- **No plan → clear outstanding dues only.** Validated: the member **must** have `dueAmount > 0` (no meaningless advance payments) and `amount ≤ dueAmount`. Updates `dueAmount = max(0, oldDue - amount)`; no Membership record is created.
+
+**`Member.dueAmount`** is a cached ledger balance (`sum(plan prices) − sum(payments)`). **`Payment.paidAt`** is set server-side to `now()` (the dialog never shows it). Member creation (`POST /api/members`) can also assign a plan and seed the first Payment + Membership in the same way.
+
 ## Models & data conventions (`models/`)
 
-- Models use the `mongoose.models.X || mongoose.model("X", schema)` guard to survive hot-reload. Compound indexes are defined `{ gymId: 1, ... }` to match scoped queries.
+- Models use the `mongoose.models.X || mongoose.model("X", schema)` hot-reload guard. Compound indexes are `{ gymId: 1, ... }` to match scoped queries.
 - **`connectDB()`** (`lib/mongodb.ts`) caches the connection on `global.mongoose`; `requireAuth` calls it for you.
-- **`Staff`** is the auth/user model. Password is bcrypt-hashed in a `pre("save")` hook; use `staff.comparePassword()`. Auth lookups filter `isActive: true`.
-- **`Counter`** provides atomic sequences (e.g. `generateInvoiceNumber()` in `lib/utils.ts` for unique `Payment.invoiceNumber` in format `INV-YYMM-NNNN`). Use it instead of counting documents.
-- **Denormalization is intentional** — see `docs/denormalization-strategy.md`. `Payment.memberName`/`planName` and `ActivityLog.staffName` are **immutable snapshots** captured at write time (audit integrity); `Member.planName` is a **cache** updated only when the member's plan changes. Do not add hooks that retroactively rewrite the snapshot fields.
+- **`Staff`** is the auth/user model. Password is bcrypt-hashed in a `pre("save")` hook; use `staff.comparePassword()`. Auth lookups filter `isActive: true`. (There is no staff-management UI/API anymore.)
+- **`Membership`** is the append-only history of membership periods, created server-side whenever a plan is purchased (no client-facing POST). `Member` holds only the *current* membership (`planId`/`planName`/`membershipStart`/`membershipExpiry`); `Membership` holds every past period.
+- **`Counter`** provides atomic sequences (`generateInvoiceNumber()` in `lib/utils.ts` → `INV-YYMM-NNNN`). Use it instead of counting documents.
+- **Denormalization is intentional.** `Payment.memberName`/`planName`, `Membership.planName`/`planPrice`/`amount`, and `ActivityLog.staffName` are **immutable snapshots** captured at write time (audit integrity); `Member.planName` is a **cache** updated only when the member's plan changes. Do not add hooks that retroactively rewrite snapshot fields. (Older `Membership` records predate the `planPrice` field — the UI falls back to `amount` when it's absent.)
 
 ## Client-side data layer
 
-- **TanStack React Query v5** is the data-fetching library. `lib/hooks/useGyms.ts` is the reference pattern: fetch with `useQuery`, invalidate cache with `useInvalidateGyms()` after mutations.
-- **`useGymSettings()` / `useCurrencySymbol()`** (`lib/useGymSettings.tsx`) — current gym's name, color, and currency. **Use `useCurrencySymbol()` instead of hardcoding `₹`** in UI. Also exposes `switchGym(gymId)` which writes the cookie and re-fetches gym settings; call `router.refresh()` in the component afterward if server components need to re-render with the new gym's data.
-- Provider tree (`components/Providers.tsx`): `SessionProvider → QueryClientProvider → ThemeProvider → GymSettingsProvider`.
-- UI is **shadcn/ui** (Radix primitives in `components/ui/`, config in `components.json`) + Tailwind. Pages live in `app/dashboard/*`; reusable layout/dashboard pieces in `components/layout` and `components/dashboard`. `GymGuard`/`NoGymState` handle the "user has no gym selected" case.
-- **Toasts** use `sonner` — call `toast.success()` / `toast.error()` directly (the `<Toaster>` is mounted in `Providers.tsx` via `components/ui/sonner.tsx`).
-- Charts (reports/dashboard) use **Recharts**. Animations use **framer-motion**.
-- **Superadmin pages** live at `app/dashboard/superadmin/` (aggregate overview + all-gyms management). These are separate from the gym-scoped `app/dashboard/` pages and are accessible only to the `superadmin` role.
+- **TanStack React Query v5** is the data-fetching library for cached lists. `lib/hooks/useGyms.ts` is the reference: fetch with `useQuery`, invalidate with `useInvalidateGyms()` after mutations. Detail pages and dialogs often fetch with plain `fetch` + `useState` instead.
+- **`useGymSettings()` / `useCurrencySymbol()`** (`lib/useGymSettings.tsx`) — current gym's name, color, currency. **Use `useCurrencySymbol()` / `formatCurrency(amount, currency)` instead of hardcoding `₹`.** Also exposes `switchGym(gymId)` (writes cookie + re-fetches); call `router.refresh()` afterward if server components must re-render. `selectedGymId` is restored from the cookie in a client `useEffect` (never during render/SSR — it would be `null`), and `switchGym` never gets overwritten by an in-flight settings fetch.
+- Provider tree (`components/Providers.tsx`): `QueryClientProvider → SessionProvider → ThemeProvider → GymSettingsProvider`.
+- UI is **shadcn/ui** (Radix primitives in `components/ui/`) + Tailwind. Pages live in `app/dashboard/*`; reusable pieces in `components/layout` and `components/dashboard`. `GymGuard`/`NoGymState` handle the "no gym selected" case. **Theme:** use semantic tokens (`bg-primary/10 text-primary`, `text-success`, `text-warning`, `text-destructive`, `shadow-card`) — never hardcoded Tailwind colors like `text-green-600` — so gym theming and dark mode work.
+- **Toasts** use `sonner` — call `toast.success()` / `toast.error()` directly.
+- Charts use **Recharts**; animations use **framer-motion**.
 
-## Forms pattern
+## Forms & dialogs pattern
 
-Client-side forms use **React Hook Form** with the Zod resolver:
+Create/edit flows are **modal dialogs**, not separate pages. The old `/dashboard/members/new` and `/dashboard/payments/new` routes now just `redirect()` to their list pages; create from a dialog instead.
 
-```ts
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { MemberSchema, type MemberInput } from "@/lib/validators";
-
-const form = useForm<MemberInput>({ resolver: zodResolver(MemberSchema) });
-```
-
-See `components/dashboard/MemberFormDialog.tsx` as the reference implementation. The same Zod schemas used by the API validators (`lib/validators/*`) should be reused on the client where possible, which keeps server and client validation in sync.
+- Dialogs use **plain `useState` form state** (not React Hook Form), with client-side checks before submit and the shared Zod schema enforced server-side. Reference: `components/dashboard/PaymentFormDialog.tsx`, `MemberFormDialog.tsx`, `GymFormDialog.tsx`.
+- **Scrollable dialog structure** (reuse this): `<DialogContent className="...max-h-[90vh] flex flex-col gap-0 p-0">`, a `shrink-0` header, a `flex-1 overflow-y-auto` body (inside a `flex-1 flex flex-col min-h-0` form), and a `shrink-0 border-t` footer with the submit button wired via `form="..."`.
+- **`DatePicker`** (`components/ui/date-picker.tsx`) wraps the calendar in a **modal Radix `Popover`** (`modal` prop). This is required inside dialogs: the popover portals to `<body>` so the calendar can overflow the dialog without causing horizontal scroll, and `modal` re-enables pointer events so day clicks aren't swallowed by the dialog's layer.
+- **`PaymentBreakdown`** (`components/dashboard/PaymentBreakdown.tsx`) is the shared "owed vs paid → balance badge" card used by both the add-member and record-payment dialogs (plan path and dues-clearing path) — pass it an `items` array.
 
 ## Key utilities (`lib/utils.ts`, `lib/session.ts`)
 
-- `formatCurrency(amount, currency)` — Intl.NumberFormat for INR/USD/EUR/GBP; always use this, never hardcode symbols.
+- `formatCurrency(amount, currency)` — Intl.NumberFormat for INR/USD/EUR/GBP; always use this.
 - `formatDate(date)` — en-IN locale, DD MMM YYYY.
-- `getMemberStatus(expiryDate)` → `"active" | "expiring" | "expired"`. "expiring" = ≤7 days remaining.
-- `daysUntilExpiry(expiryDate)` — negative means already expired.
-- `buildWhatsAppLink(phone, message)` / `buildSmsLink(phone, message)` — contact action helpers.
-- `SessionUser` interface (`lib/session.ts`) carries `id, name, email, role, gymIds[], selectedGymId?`. `isSuperAdmin(user)` and `requireGymId(user)` are defined here.
-
-## Planning docs
-
-Design rationale and in-progress work live in `plans/` (`architecture-review.md`, `multi-tenant-migration.md`, `ui-redesign.md`) and `docs/`. Consult them before large refactors.
+- `getMemberStatus(expiryDate)` → `"active" | "expiring" | "expired"` ("expiring" = ≤7 days). `daysUntilExpiry(expiryDate)` — negative means expired.
+- `buildWhatsAppLink(phone, message)` / `buildSmsLink(phone, message)` — contact helpers.
+- `SessionUser` (`lib/session.ts`) carries `id, name, email, role, gymIds[], selectedGymId?`; `requireGymId(user)` resolves the active gym.

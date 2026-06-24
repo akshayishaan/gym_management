@@ -8,6 +8,7 @@ export interface IMembership extends Document {
   startDate: Date;
   expiryDate: Date;
   paymentId?: mongoose.Types.ObjectId;  // link to the Payment that created this record
+  planPrice?: number;     // immutable snapshot of the plan's price at purchase time
   amount?: number;        // immutable snapshot of amount paid
   grantedBy: mongoose.Types.ObjectId;   // Staff who recorded the payment
   notes?: string;
@@ -24,6 +25,7 @@ const MembershipSchema = new Schema<IMembership>(
     startDate: { type: Date, required: true },
     expiryDate:{ type: Date, required: true },
     paymentId: { type: Schema.Types.ObjectId, ref: "Payment" },
+    planPrice: { type: Number },
     amount:    { type: Number },
     grantedBy: { type: Schema.Types.ObjectId, ref: "Staff", required: true },
     notes:     { type: String },

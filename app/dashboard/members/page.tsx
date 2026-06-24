@@ -333,7 +333,7 @@ export default function MembersPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
+                          <DropdownMenu modal={false}>
                             <DropdownMenuTrigger asChild>
                               <Button
                                 size="icon"
