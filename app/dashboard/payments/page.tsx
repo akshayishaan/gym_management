@@ -59,7 +59,7 @@ function getInitials(name: string) {
 }
 
 export default function PaymentsPage() {
-  const { currency } = useGymSettings();
+  const { currency, selectedGymId } = useGymSettings();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,7 @@ export default function PaymentsPage() {
     setPayments(data.payments || []);
     setTotal(data.total || 0);
     setLoading(false);
-  }, [memberId, month]);
+  }, [memberId, month, selectedGymId]);
 
   useEffect(() => { fetchPayments(); }, [fetchPayments]);
 

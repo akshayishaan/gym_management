@@ -20,6 +20,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { formatCurrency } from "@/lib/utils";
+import { useGymSettings } from "@/lib/useGymSettings";
 import { ChevronLeft, ChevronRight, TrendingUp, Users, CreditCard, Dumbbell } from "lucide-react";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -52,12 +53,13 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 export default function ReportsPage() {
+  const { selectedGymId } = useGymSettings();
   const [data, setData] = useState<ReportData | null>(null);
   const [year, setYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
     fetch(`/api/reports?year=${year}`).then(r => r.json()).then(setData);
-  }, [year]);
+  }, [year, selectedGymId]);
 
   if (!data) {
     return (

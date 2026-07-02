@@ -31,6 +31,7 @@ import {
   buildSmsLink,
 } from "@/lib/utils";
 import Link from "next/link";
+import { useGymSettings } from "@/lib/useGymSettings";
 
 interface DashboardData {
   totalMembers: number;
@@ -97,6 +98,7 @@ const item = {
 export default function DashboardPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const { selectedGymId } = useGymSettings();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -116,7 +118,7 @@ export default function DashboardPage() {
         setData(d);
         setLoading(false);
       });
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, selectedGymId]);
 
   if (isSuperAdmin) return null;
 

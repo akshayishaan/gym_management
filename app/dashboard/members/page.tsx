@@ -63,7 +63,7 @@ import {
   daysUntilExpiry,
   formatCurrency,
 } from "@/lib/utils";
-import { useCurrencySymbol } from "@/lib/useGymSettings";
+import { useCurrencySymbol, useGymSettings } from "@/lib/useGymSettings";
 import { useSearchParams, useRouter } from "next/navigation";
 
 interface Member {
@@ -108,6 +108,7 @@ export default function MembersPage() {
   const [editMember, setEditMember] = useState<import("@/components/dashboard/MemberFormDialog").MemberFormInitialData | null>(null);
   const [renewMember, setRenewMember] = useState<{ id: string; name: string } | null>(null);
   const currencySymbol = useCurrencySymbol();
+  const { selectedGymId } = useGymSettings();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -121,7 +122,7 @@ export default function MembersPage() {
     setMembers(data.members);
     setTotal(data.total);
     setLoading(false);
-  }, [search, status]);
+  }, [search, status, selectedGymId]);
 
   useEffect(() => {
     const s = searchParams.get("status");

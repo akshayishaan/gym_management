@@ -61,29 +61,34 @@ The wrapper handles auth (`requireAuth` → 401), injects `selectedGymId`, and c
 | `/api/gyms` | GET, POST | List user's gyms; create gym |
 | `/api/gyms/[id]` | GET, PUT, DELETE | View/edit/delete gym (DELETE cascades) |
 | `/api/members` | GET, POST | List members (search/status/page); create member (may seed a plan + initial payment) |
-| `/api/members/[id]` | GET, PUT, DELETE | Member CRUD |
+| `/api/members/[id]` | GET, PUT, DELETE | Member CRUD (DELETE is a **soft-delete** — sets `isActive:false`; detail GET still works) |
 | `/api/payments` | GET, POST | List payments (month filter); **record payment — see business logic below** |
-| `/api/payments/[id]` | GET, DELETE | Get/delete payment |
+| `/api/payments/[id]` | GET, DELETE | Get/delete payment (DELETE is **newest-first only**; deletes linked Membership, then recomputes) |
 | `/api/memberships` | GET | Membership history for a member (`?memberId=`), newest period first |
 | `/api/plans` | GET, POST | List plans; create plan |
-| `/api/plans/[id]` | GET, PUT, DELETE | Plan CRUD |
+| `/api/plans/[id]` | GET, PUT | Plan CRUD — **no DELETE**; deactivate via `PUT { isActive: false }` instead |
 | `/api/dashboard` | GET | Stats: total members, revenue, expiring list |
 | `/api/reports` | GET | Yearly analytics: monthly revenue, members, plan distribution |
-| `/api/settings` | GET, PUT | Fetch/update gym settings (name, color, currency) |
+| `/api/settings` | GET, PUT | Fetch/update gym settings (`name`, `primaryColor`, `currency`, `address`, `phone`, `email`, `logo`, `expiryReminderDays`) — thin wrapper around the active gym doc |
 | `/api/activity` | GET | Activity log for gym |
+| `/api/auth/signup` | POST | **Public** (no `apiHandler`). Self-registers a new `Staff` with `role:"admin"` and empty `gymIds`. The new user must then create or be added to a gym before the dashboard is useful. |
 
 ## Payments, dues & membership renewal — core business logic
 
 `POST /api/payments` is the **single source of truth** for membership state. Read it before touching anything payment-related. Two distinct flows depending on whether a `planId` is supplied:
 
-- **Plan selected → buy / renew a membership.** The handler computes the membership window and writes it across three places:
-  - `renewFrom` = the supplied `membershipStart`, else (if the member is still active, i.e. `membershipExpiry > now`) the **current expiry** so renewals *stack and never lose days*, else `now`. `renewedUntil = renewFrom + plan.durationDays`.
-  - Updates the **Member**: `planId`, `planName`, `membershipStart`, `membershipExpiry`, and `dueAmount = max(0, oldDue + plan.price - amountPaid)`.
-  - Creates an immutable **Membership** history record (`planPrice` snapshot, `planName`, `startDate`, `expiryDate`, `amount` paid, `paymentId`).
-  - Amount cap = `plan.price + existing dues` (one payment can settle the plan and old dues together). Partial payment is allowed and increases `dueAmount`.
-- **No plan → clear outstanding dues only.** Validated: the member **must** have `dueAmount > 0` (no meaningless advance payments) and `amount ≤ dueAmount`. Updates `dueAmount = max(0, oldDue - amount)`; no Membership record is created.
+Payments are **single-purpose** — a payment is *either* a dues-clearing payment (no plan) *or* a membership purchase (plan), never both.
 
-**`Member.dueAmount`** is a cached ledger balance (`sum(plan prices) − sum(payments)`). **`Payment.paidAt`** is set server-side to `now()` (the dialog never shows it). Member creation (`POST /api/members`) can also assign a plan and seed the first Payment + Membership in the same way.
+- **Plan selected → buy / renew a membership.**
+  - `renewFrom` = the supplied `membershipStart`, else (if the member is still active, i.e. `membershipExpiry > now`) the **current expiry** so renewals *stack and never lose days*, else `now`. `renewedUntil = renewFrom + plan.durationDays`.
+  - Creates an immutable **Membership** history record (`planPrice` snapshot, `planName`, `startDate`, `expiryDate`, `amount` paid, `paymentId`).
+  - Amount cap = **`plan.price` only** (old dues are cleared in a separate no-plan payment). Partial payment is allowed.
+  - After writing the Membership + Payment, calls **`recomputeMemberAggregates(memberId)`** (`lib/memberLedger.ts`) which re-derives `dueAmount`, `membershipExpiry`, and the current plan fields from the surviving records — single source of truth, self-healing.
+- **No plan → clear outstanding dues only.** Validated: the member **must** have `dueAmount > 0` and `amount ≤ dueAmount`. No Membership record is created; recompute runs after.
+
+**`DELETE /api/payments/[id]`** is newest-first: the API blocks deletion of any payment that isn't the member's most-recent one (returns 400). On success it deletes the linked Membership row and calls `recomputeMemberAggregates` to restore the prior window.
+
+**`Member.dueAmount`** is a cached ledger balance recomputed as `max(0, Σ Membership.planPrice − Σ Payment.amount)`. **`Payment.paidAt`** is set server-side to `now()`. Member creation (`POST /api/members`) can also assign a plan and seed the first Payment + Membership, then recomputes.
 
 ## Models & data conventions (`models/`)
 
@@ -91,13 +96,17 @@ The wrapper handles auth (`requireAuth` → 401), injects `selectedGymId`, and c
 - **`connectDB()`** (`lib/mongodb.ts`) caches the connection on `global.mongoose`; `requireAuth` calls it for you.
 - **`Staff`** is the auth/user model. Password is bcrypt-hashed in a `pre("save")` hook; use `staff.comparePassword()`. Auth lookups filter `isActive: true`. (There is no staff-management UI/API anymore.)
 - **`Membership`** is the append-only history of membership periods, created server-side whenever a plan is purchased (no client-facing POST). `Member` holds only the *current* membership (`planId`/`planName`/`membershipStart`/`membershipExpiry`); `Membership` holds every past period.
+- **`Member.isActive`** (boolean, default `true`) is a soft-delete flag. Filter active members with `{ isActive: { $ne: false } }` — **not** `{ isActive: true }` — so legacy documents without the field remain visible. The detail GET is unfiltered (soft-deleted members still have a detail page showing a Deleted badge + Restore button). All list/count/report/picker queries must include the `$ne: false` filter.
+- **`lib/memberLedger.ts` → `recomputeMemberAggregates(memberId)`** is the single writer of `Member.dueAmount` plus the current membership window. Call it after every Payment/Membership create or delete instead of computing inline. It self-heals any prior inconsistency.
 - **`Counter`** provides atomic sequences (`generateInvoiceNumber()` in `lib/utils.ts` → `INV-YYMM-NNNN`). Use it instead of counting documents.
 - **Denormalization is intentional.** `Payment.memberName`/`planName`, `Membership.planName`/`planPrice`/`amount`, and `ActivityLog.staffName` are **immutable snapshots** captured at write time (audit integrity); `Member.planName` is a **cache** updated only when the member's plan changes. Do not add hooks that retroactively rewrite snapshot fields. (Older `Membership` records predate the `planPrice` field — the UI falls back to `amount` when it's absent.)
+- **Gym delete cascades everything** (Members, Payments, Plans, ActivityLog, and **Memberships**). It is the one true hard-delete in the system.
 
 ## Client-side data layer
 
 - **TanStack React Query v5** is the data-fetching library for cached lists. `lib/hooks/useGyms.ts` is the reference: fetch with `useQuery`, invalidate with `useInvalidateGyms()` after mutations. Detail pages and dialogs often fetch with plain `fetch` + `useState` instead.
 - **`useGymSettings()` / `useCurrencySymbol()`** (`lib/useGymSettings.tsx`) — current gym's name, color, currency. **Use `useCurrencySymbol()` / `formatCurrency(amount, currency)` instead of hardcoding `₹`.** Also exposes `switchGym(gymId)` (writes cookie + re-fetches); call `router.refresh()` afterward if server components must re-render. `selectedGymId` is restored from the cookie in a client `useEffect` (never during render/SSR — it would be `null`), and `switchGym` never gets overwritten by an in-flight settings fetch.
+- **Gym-switch refetch:** Pages that use plain `fetch` + `useState` must include `selectedGymId` (from `useGymSettings()`) in their `useEffect`/`useCallback` dependency arrays. When the user switches gyms, `selectedGymId` changes → effects re-run → the page fetches data for the new gym automatically.
 - Provider tree (`components/Providers.tsx`): `QueryClientProvider → SessionProvider → ThemeProvider → GymSettingsProvider`.
 - UI is **shadcn/ui** (Radix primitives in `components/ui/`) + Tailwind. Pages live in `app/dashboard/*`; reusable pieces in `components/layout` and `components/dashboard`. `GymGuard`/`NoGymState` handle the "no gym selected" case. **Theme:** use semantic tokens (`bg-primary/10 text-primary`, `text-success`, `text-warning`, `text-destructive`, `shadow-card`) — never hardcoded Tailwind colors like `text-green-600` — so gym theming and dark mode work.
 - **Toasts** use `sonner` — call `toast.success()` / `toast.error()` directly.
@@ -106,6 +115,8 @@ The wrapper handles auth (`requireAuth` → 401), injects `selectedGymId`, and c
 ## Forms & dialogs pattern
 
 Create/edit flows are **modal dialogs**, not separate pages. The old `/dashboard/members/new` and `/dashboard/payments/new` routes now just `redirect()` to their list pages; create from a dialog instead.
+
+**Invoice page** (`app/dashboard/payments/[id]/invoice/page.tsx`) is a print-friendly, standalone page. It fetches payment + settings and calls `window.print()`. It intentionally uses hardcoded `gray-*` / `green-*` Tailwind colors (not semantic tokens) because the invoice always renders on a white background.
 
 - Dialogs use **plain `useState` form state** (not React Hook Form), with client-side checks before submit and the shared Zod schema enforced server-side. Reference: `components/dashboard/PaymentFormDialog.tsx`, `MemberFormDialog.tsx`, `GymFormDialog.tsx`.
 - **Scrollable dialog structure** (reuse this): `<DialogContent className="...max-h-[90vh] flex flex-col gap-0 p-0">`, a `shrink-0` header, a `flex-1 overflow-y-auto` body (inside a `flex-1 flex flex-col min-h-0` form), and a `shrink-0 border-t` footer with the submit button wired via `form="..."`.

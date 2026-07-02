@@ -41,7 +41,7 @@ type PlanForm = {
 export default function PlansPage() {
   const { data: session } = useSession();
   const role = (session?.user as { role?: string })?.role;
-  const { currency } = useGymSettings();
+  const { currency, selectedGymId } = useGymSettings();
   const currencySymbol = useCurrencySymbol();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [open, setOpen] = useState(false);
@@ -53,7 +53,7 @@ export default function PlansPage() {
       .then(r => r.json())
       .then(d => setPlans(Array.isArray(d) ? d : d.plans || []));
 
-  useEffect(() => { fetchPlans(); }, []);
+  useEffect(() => { fetchPlans(); }, [selectedGymId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openEdit(p: Plan) {
     setEditPlan(p);
