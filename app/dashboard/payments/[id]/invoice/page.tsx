@@ -1,92 +1,110 @@
 "use client";
 
-import { useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, use } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer } from "lucide-react";
-import { useState } from "react";
+import { Printer } from "lucide-react";
+import { StackHeader } from "@/components/layout/StackHeader";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { useGymSettings } from "@/lib/useGymSettings";
 
 interface Payment {
   _id: string; memberName: string; amount: number; method: string;
   invoiceNumber: string; paidAt: string; planName?: string; notes?: string;
+  status: "paid" | "voided" | "refunded";
 }
-interface Settings { gymName: string; address?: string; phone?: string; email?: string; }
-
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
   const [payment, setPayment] = useState<Payment | null>(null);
-  const [settings, setSettings] = useState<Settings>({ gymName: "My Gym" });
+  const settings = useGymSettings();
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/payments/${id}`).then(r => r.json()),
-      fetch("/api/settings").then(r => r.json()),
-    ]).then(([p, s]) => { setPayment(p); setSettings(s); });
+    fetch(`/api/payments/${id}`).then((response) => response.json()).then(setPayment);
   }, [id]);
 
-  if (!payment) return <div><div className="h-48 bg-muted rounded animate-pulse" /></div>;
+  if (!payment) {
+    return (
+      <div className="flex min-h-svh flex-col bg-background">
+        <StackHeader title="Invoice" className="print:hidden" />
+        <div className="px-4 py-4">
+          <div className="h-64 animate-pulse rounded-lg bg-muted" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-2xl space-y-4">
-      <div className="flex items-center gap-3 print:hidden">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}><ArrowLeft className="h-4 w-4" /></Button>
-        <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-2" />Print Invoice</Button>
-      </div>
+    <div className="app-canvas flex min-h-svh flex-col bg-background">
+      <StackHeader
+        title="Invoice"
+        className="print:hidden"
+        actions={
+          <Button size="sm" className="gap-1.5" onClick={() => window.print()}>
+            <Printer className="h-3.5 w-3.5" /> Print
+          </Button>
+        }
+      />
 
-      <div className="border rounded-lg p-8 space-y-6 bg-white" id="invoice">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold">{settings.gymName}</h1>
-            {settings.address && <p className="text-sm text-gray-600">{settings.address}</p>}
-            {settings.phone && <p className="text-sm text-gray-600">{settings.phone}</p>}
-            {settings.email && <p className="text-sm text-gray-600">{settings.email}</p>}
+      <div
+        className="flex-1 px-4 py-4"
+        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+      >
+        <div className="app-surface space-y-6 rounded-[2rem] bg-card p-5 print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none" id="invoice">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary font-display text-lg font-extrabold text-primary-foreground print:border print:border-black print:bg-white print:text-black">
+                {settings.gymName.slice(0, 1).toUpperCase()}
+              </div>
+              <h1 className="truncate font-display text-xl font-extrabold text-foreground print:text-black">{settings.gymName}</h1>
+              {settings.address && <p className="mt-1 text-xs leading-5 text-muted-foreground print:text-black">{settings.address}</p>}
+              {settings.phone && <p className="text-xs text-muted-foreground print:text-black">{settings.phone}</p>}
+              {settings.email && <p className="text-xs text-muted-foreground print:text-black">{settings.email}</p>}
+            </div>
+            <div className="shrink-0 text-right">
+              <span className={`rounded-full px-3 py-1 text-[10px] font-extrabold tracking-wider print:border print:border-black print:bg-white print:text-black ${
+                payment.status === "paid"
+                  ? "bg-success/10 text-success"
+                  : payment.status === "refunded"
+                    ? "bg-warning/15 text-warning"
+                    : "bg-muted text-muted-foreground"
+              }`}>
+                {payment.status.toUpperCase()}
+              </span>
+              <h2 className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.18em] text-muted-foreground print:text-black">Receipt</h2>
+              <p className="mt-1 font-mono text-xs font-bold text-foreground print:text-black">{payment.invoiceNumber}</p>
+              <p className="mt-1 text-xs text-muted-foreground print:text-black">{formatDate(payment.paidAt)}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <h2 className="text-xl font-bold text-primary">INVOICE</h2>
-            <p className="text-sm font-mono">{payment.invoiceNumber}</p>
-            <p className="text-sm text-gray-600">Date: {formatDate(payment.paidAt)}</p>
+
+          <div className="border-t border-dashed border-border print:border-black" />
+
+          <div className="rounded-2xl bg-muted/70 p-4 print:border print:border-black print:bg-white">
+            <h3 className="app-section-label print:text-black">Received from</h3>
+            <p className="mt-1 font-display text-lg font-bold text-foreground print:text-black">{payment.memberName}</p>
           </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground print:text-black">{payment.planName || "Membership Fee"}</p>
+                {payment.notes && <p className="mt-1 text-xs text-muted-foreground print:text-black">{payment.notes}</p>}
+              </div>
+              <p className="shrink-0 text-sm font-bold text-foreground print:text-black">{formatCurrency(payment.amount, settings.currency)}</p>
+            </div>
+            <div className="border-t border-dashed border-border print:border-black" />
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="app-section-label print:text-black">Payment method</p>
+                <p className="mt-1 text-sm font-bold capitalize text-foreground print:text-black">{payment.method.replace("_", " ")}</p>
+              </div>
+              <div className="text-right">
+                <p className="app-section-label print:text-black">Total paid</p>
+                <p className="mt-1 font-display text-2xl font-extrabold text-primary print:text-black">{formatCurrency(payment.amount, settings.currency)}</p>
+              </div>
+            </div>
+          </div>
+
+          <p className="pt-2 text-center text-xs font-semibold text-muted-foreground print:text-black">Thank you for training with us.</p>
         </div>
-
-        <hr />
-
-        <div>
-          <h3 className="font-semibold text-sm text-gray-500 uppercase tracking-wide mb-1">Bill To</h3>
-          <p className="font-medium text-lg">{payment.memberName}</p>
-        </div>
-
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-2 font-semibold">Description</th>
-              <th className="text-right py-2 font-semibold">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-gray-100">
-              <td className="py-3">
-                <p className="font-medium">{payment.planName || "Membership Fee"}</p>
-                {payment.notes && <p className="text-gray-500 text-xs">{payment.notes}</p>}
-              </td>
-              <td className="text-right py-3 font-medium">{formatCurrency(payment.amount)}</td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <td className="py-3 font-bold">Total</td>
-              <td className="text-right py-3 font-bold text-lg">{formatCurrency(payment.amount)}</td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div className="flex justify-between text-sm text-gray-600">
-          <span>Payment Method: <strong className="capitalize">{payment.method.replace("_", " ")}</strong></span>
-          <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full font-medium">PAID</span>
-        </div>
-
-        <p className="text-center text-xs text-gray-400 pt-4">Thank you for your membership! 💪</p>
       </div>
     </div>
   );

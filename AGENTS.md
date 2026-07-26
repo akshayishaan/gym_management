@@ -9,6 +9,7 @@ npm run dev      # localhost:3000
 npm run build    # standalone output; type-check runs here
 npm run lint     # next lint
 npm run seed     # tsx scripts/seed.ts
+npm run migrate:lifecycle -- --apply
 ```
 
 There is **no test runner**. Verify with `npm run build` or `tsc --noEmit`. Single-file scripts run via `npx tsx ...`.
@@ -24,7 +25,7 @@ Use `node -v` >= 24. Copy `.env.example` to `.env` with `MONGODB_URI`, `NEXTAUTH
 - **Auth wrapper.** API routes must use `apiHandler` or `apiHandlerWithParams` (not raw handlers). Throw `AuthError` / `ForbiddenError` from `lib/withAuth.ts` for auth issues. The wrapper translates them to 401/403 and validates Zod schemas to 422.
 - **ActivityLog is mandatory.** Every mutation must write an `ActivityLog` entry after the DB write.
 - **Soft-delete filter.** Filter active members with `{ isActive: { $ne: false } }`, not `{ isActive: true }` (legacy docs lack the field).
-- **Member ledger is centralized.** Call `recomputeMemberAggregates(memberId)` (`lib/memberLedger.ts`) after any Payment/Membership create or delete. Do not compute inline.
+- **Membership lifecycle is centralized.** All Payment/Membership writes go through `lib/membershipLifecycle.ts`; it calls `recomputeMemberAggregates(gymId, memberId, session)` inside the transaction. Do not write or compute inline.
 - **`selectedGymId` is a non-httpOnly cookie.** Read server-side via `getSelectedGymId()`, write client-side via `setGymCookie()`. Effects must depend on it to refetch after gym switch.
 
 ## Conventions
@@ -33,15 +34,15 @@ Use `node -v` >= 24. Copy `.env.example` to `.env` with `MONGODB_URI`, `NEXTAUTH
 - **API surface:** `app/api/` routes follow the `apiHandler` pattern. List endpoints accept `search`, `status`, `page`, `limit` from `searchParams` and return `{ items, total, page, limit }`.
 - **UI:** shadcn/ui (Radix in `components/ui/`) + Tailwind. Use semantic theme tokens (`bg-primary`, `text-success`, etc.) — never hardcoded Tailwind colors like `text-green-600`.
 - **Dialogs:** Create/edit flows are modal dialogs, not separate routes. Forms use plain `useState`; server-side uses Zod validators from `lib/validators/`.
-- **DatePicker:** Requires `modal` prop inside dialogs to portal outside and keep pointer events.
+- **DatePicker:** Use the themed `MobileDatePicker`; Membership values stay as `YYYY-MM-DD` date-only strings.
 - **Toasts:** `sonner` (`toast.success()`, `toast.error()`).
 
 ## Docker
 
-`docker-compose up` starts `app`, `mongo:7`, and a one-shot seed service. Env vars: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, plus `SEED_ADMIN_*` for seeding.
+`docker-compose up` starts `app`, a MongoDB replica set, its initializer, and a one-shot seed service. Transactions require the replica set. Env vars: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, plus `SEED_ADMIN_*` for seeding.
 
 ## Extras
 
-- Payments are the single source of truth for membership state — read `POST /api/payments` before touching payment logic.
+- `lib/membershipLifecycle.ts` is the single write interface for Membership and Payment state.
 - There is no role-based UI for new features; `SessionUser.role` is effectively always `"admin"`.
 - `Counter` model provides atomic invoice sequences (`generateInvoiceNumber()`).

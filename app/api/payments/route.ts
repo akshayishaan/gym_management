@@ -3,143 +3,105 @@ import { apiHandler } from "@/lib/apiHandler";
 import { getGymFilter } from "@/lib/withAuth";
 import { SessionUser } from "@/lib/session";
 import Payment from "@/models/Payment";
-import Member from "@/models/Member";
-import Plan from "@/models/Plan";
 import Membership from "@/models/Membership";
-import ActivityLog from "@/models/ActivityLog";
+import Gym from "@/models/Gym";
 import { paymentCreateSchema } from "@/lib/validators/payment";
-import { generateInvoiceNumber } from "@/lib/utils";
-import { recomputeMemberAggregates } from "@/lib/memberLedger";
+import { recordPayment } from "@/lib/membershipLifecycle";
+import { localDateTimeToInstant } from "@/lib/membershipCalendar";
 
 export const GET = apiHandler(async (req: NextRequest, user: SessionUser) => {
   const { searchParams } = new URL(req.url);
   const memberId = searchParams.get("memberId") || "";
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+  const parsedLimit = Number.parseInt(searchParams.get("limit") || "20", 10);
+  const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1;
+  const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, parsedLimit)) : 20;
   const month = searchParams.get("month") || "";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const query: any = { ...getGymFilter(user) };
+  const gymFilter = getGymFilter(user);
+  const gym = await Gym.findById(gymFilter.gymId).select("timezone").lean();
+  const timeZone = gym?.timezone || "Asia/Kolkata";
+  const query: Record<string, unknown> = { ...gymFilter };
+  const summaryFilter: Record<string, unknown> = { ...gymFilter };
 
-  if (memberId) query.memberId = memberId;
+  if (memberId) {
+    query.memberId = memberId;
+    summaryFilter.memberId = memberId;
+  }
   if (month) {
-    const [y, m] = month.split("-").map(Number);
-    const start = new Date(y, m - 1, 1);
-    const end = new Date(y, m, 1);
-    query.paidAt = { $gte: start, $lt: end };
+    const [year, monthNumber] = month.split("-").map(Number);
+    if (Number.isInteger(year) && monthNumber >= 1 && monthNumber <= 12) {
+      const nextYear = monthNumber === 12 ? year + 1 : year;
+      const nextMonth = monthNumber === 12 ? 1 : monthNumber + 1;
+      const range = {
+        $gte: localDateTimeToInstant(`${year}-${String(monthNumber).padStart(2, "0")}-01`, timeZone),
+        $lt: localDateTimeToInstant(`${nextYear}-${String(nextMonth).padStart(2, "0")}-01`, timeZone),
+      };
+      query.paidAt = range;
+      summaryFilter.period = range;
+    }
   }
 
-  const total = await Payment.countDocuments(query);
-  const payments = await Payment.find(query)
-    .sort({ paidAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .lean();
+  const period = summaryFilter.period as { $gte: Date; $lt: Date } | undefined;
+  delete summaryFilter.period;
+  const [total, payments, collected] = await Promise.all([
+    Payment.countDocuments(query),
+    Payment.find(query)
+      .sort({ paidAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Payment.aggregate<{ total: number }>([
+      {
+        $match: {
+          ...summaryFilter,
+          status: "paid",
+          ...(period && { paidAt: period }),
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]),
+  ]);
+  const memberships = await Membership.find({
+    ...gymFilter,
+    paymentId: { $in: payments.map((payment) => payment._id) },
+  }).select("paymentId status").lean();
+  const membershipByPayment = new Map(
+    memberships.map((membership) => [membership.paymentId?.toString(), membership])
+  );
+  const items = payments.map((payment) => ({
+    ...payment,
+    membershipId: membershipByPayment.get(payment._id.toString())?._id.toString(),
+    membershipStatus: membershipByPayment.get(payment._id.toString())?.status,
+  }));
 
-  return NextResponse.json({ payments, total, page, limit });
+  return NextResponse.json({
+    payments: items,
+    total,
+    page,
+    limit,
+    summary: { netAmount: collected[0]?.total || 0 },
+  });
 });
 
 export const POST = apiHandler(async (req: NextRequest, user: SessionUser) => {
-  const gymId = user.selectedGymId!;
-  const body = await req.json();
-  const validated = paymentCreateSchema.parse(body);
-
-  // membershipStart is used to set the membership window — never stored on Payment.
-  const { membershipStart, ...paymentFields } = validated;
-
-  const member = await Member.findById(validated.memberId);
-  if (!member) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
-  }
-
-  const oldDue = member.dueAmount ?? 0;
-  const now = new Date();
-
-  // ── Resolve the plan (if any) and validate the amount against what's owed ──
-  let plan = null;
-  if (validated.planId) {
-    plan = await Plan.findById(validated.planId);
-    if (!plan) {
-      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
-    }
-    // Single-purpose payments: a plan payment covers the plan price only.
-    // Pre-existing dues are settled separately via a no-plan payment.
-    if (validated.amount > plan.price) {
-      return NextResponse.json(
-        { error: "Amount exceeds the plan price. Clear outstanding dues in a separate payment." },
-        { status: 400 }
-      );
-    }
-  } else {
-    // No plan = clearing dues. Block meaningless advance payments.
-    if (oldDue <= 0) {
-      return NextResponse.json(
-        { error: "No outstanding dues. Select a plan to record a payment." },
-        { status: 400 }
-      );
-    }
-    if (validated.amount > oldDue) {
-      return NextResponse.json(
-        { error: "Amount exceeds outstanding dues." },
-        { status: 400 }
-      );
-    }
-  }
-
-  const invoiceNumber = await generateInvoiceNumber();
-  const payment = await Payment.create({
-    ...paymentFields,
-    gymId,
-    invoiceNumber,
-    createdBy: user.id,
+  const gymFilter = getGymFilter(user);
+  const validated = paymentCreateSchema.parse(await req.json());
+  const { requestId, memberId, planId, amount, method, membershipStart, notes } = validated;
+  const result = await recordPayment({
+    gymId: String(gymFilter.gymId),
+    requestId,
+    actor: { id: user.id, name: user.name },
+    now: new Date(),
+    memberId,
+    planId,
+    amount,
+    method,
+    membershipStart,
+    notes,
   });
+  const payment = result.paymentId
+    ? await Payment.findOne({ _id: result.paymentId, ...gymFilter }).lean()
+    : null;
 
-  let renewedUntil: Date | null = null;
-
-  if (plan) {
-    // ── Buy / renew a membership ────────────────────────────────────────────
-    // Start from the explicit date if provided; otherwise stack from the
-    // current expiry while the member is still active, else start today.
-    const isActive = member.membershipExpiry && member.membershipExpiry > now;
-    const renewFrom: Date = membershipStart
-      ? new Date(membershipStart)
-      : isActive
-      ? member.membershipExpiry!
-      : now;
-
-    renewedUntil = new Date(renewFrom);
-    renewedUntil.setDate(renewedUntil.getDate() + plan.durationDays);
-
-    // Append to membership history.
-    await Membership.create({
-      gymId,
-      memberId: validated.memberId,
-      planId: plan._id,
-      planName: plan.name,
-      startDate: renewFrom,
-      expiryDate: renewedUntil,
-      paymentId: payment._id,
-      planPrice: plan.price,
-      amount: validated.amount,
-      grantedBy: user.id,
-    });
-  }
-
-  // Single writer of dueAmount + membership window — derive from the records
-  // we just wrote (the new Membership becomes the latest period; the payment
-  // reduces the balance).
-  await recomputeMemberAggregates(validated.memberId);
-
-  await ActivityLog.create({
-    gymId,
-    staffId: user.id,
-    staffName: user.name || "Unknown",
-    action: "created",
-    entity: "payment",
-    entityId: payment._id.toString(),
-    details: renewedUntil
-      ? `Recorded payment of ${payment.amount} for ${payment.memberName} (${invoiceNumber}). Membership active until ${renewedUntil.toDateString()}.`
-      : `Recorded payment of ${payment.amount} for ${payment.memberName} (${invoiceNumber}).`,
-  });
-
-  return NextResponse.json({ ...payment.toObject(), renewedUntil }, { status: 201 });
+  return NextResponse.json({ payment, ...result }, { status: 201 });
 });

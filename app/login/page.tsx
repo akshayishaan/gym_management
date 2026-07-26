@@ -4,12 +4,10 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { Dumbbell, Zap, Shield, TrendingUp } from "lucide-react";
+import { Dumbbell, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LoginPage() {
@@ -69,134 +67,152 @@ export default function LoginPage() {
     }
   }
 
-  const features = [
-    { icon: Zap, text: "Lightning fast member management" },
-    { icon: Shield, text: "Secure payment tracking" },
-    { icon: TrendingUp, text: "Real-time analytics & insights" },
-  ];
-
   return (
-    <div className="min-h-screen flex">
-      {/* Left Panel - Brand */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-900">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-0 left-0 w-96 h-96 bg-orange-500 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-red-500 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
-          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-amber-500 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+    <div className="app-canvas relative min-h-svh overflow-hidden">
+      <div className="pointer-events-none absolute -right-24 -top-16 h-72 w-72 rounded-full bg-primary/15 blur-3xl" />
+      <div className="pointer-events-none absolute -left-24 top-1/3 h-56 w-56 rounded-full bg-accent blur-3xl" />
+
+      <div
+        className="relative mx-auto flex min-h-svh w-full max-w-md flex-col px-5"
+        style={{
+          paddingTop: "calc(1.25rem + env(safe-area-inset-top))",
+          paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))",
+        }}
+      >
+      <div className="pb-8 pt-2">
+        <div className="flex items-center gap-2 text-primary">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+            <Dumbbell className="h-4 w-4" />
+          </div>
+          <span className="text-[11px] font-extrabold uppercase tracking-[0.2em]">Gym Manager</span>
         </div>
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-2.5 shadow-lg shadow-orange-500/20">
-              <Dumbbell className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-white font-bold text-xl">Gym Manager</span>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }} className="space-y-8">
-            <div>
-              <h2 className="text-4xl font-bold text-white tracking-tight leading-tight">
-                Manage your gym<br />
-                <span className="text-orange-400">with power & precision</span>
-              </h2>
-              <p className="text-slate-400 mt-4 text-lg max-w-md">
-                The all-in-one platform for modern gym management. Track members, payments, and growth effortlessly.
-              </p>
-            </div>
-            <div className="space-y-4">
-              {features.map((feature, i) => (
-                <motion.div key={feature.text} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 + i * 0.1 }} className="flex items-center gap-3 text-slate-300">
-                  <div className="p-1.5 rounded-lg bg-white/10">
-                    <feature.icon className="h-4 w-4 text-orange-400" />
-                  </div>
-                  <span className="text-sm">{feature.text}</span>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="text-slate-500 text-sm">
-            Trusted by 500+ gyms worldwide
-          </motion.p>
+        <div className="mt-7 max-w-xs">
+          <div className="mb-3 flex items-center gap-2 text-xs font-bold text-success">
+            <span className="h-2 w-2 rounded-full bg-success shadow-[0_0_0_4px_hsl(var(--success)/0.12)]" />
+            Your floor, in your pocket
+          </div>
+          <h1 className="font-display text-[2.65rem] font-extrabold leading-[0.95] tracking-[-0.06em] text-balance">
+            Run the gym. Keep moving.
+          </h1>
         </div>
       </div>
 
-      {/* Right Panel - Forms */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-background">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, type: "spring", stiffness: 300, damping: 24 }}
-          className="w-full max-w-md"
-        >
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-xl p-2.5 shadow-lg shadow-orange-500/20">
-              <Dumbbell className="h-6 w-6 text-white" />
-            </div>
-            <span className="font-bold text-xl">Gym Manager</span>
+      <div className="app-surface flex-1 rounded-[2rem] p-5">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "signin" | "signup")} className="w-full">
+        <TabsList className="grid h-11 w-full grid-cols-2">
+          <TabsTrigger value="signin">Sign In</TabsTrigger>
+          <TabsTrigger value="signup">Sign Up</TabsTrigger>
+        </TabsList>
+
+        {/* ── Sign In ── */}
+        <TabsContent value="signin" className="mt-6">
+          <div className="mb-5">
+            <h2 className="font-display text-xl font-bold">Welcome back</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Pick up where your team left off.</p>
           </div>
+          <form onSubmit={handleSignIn} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">Email</Label>
+              <Input
+                id="login-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="admin@gym.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+                className="h-12 text-base"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">Password</Label>
+              <Input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                required
+                className="h-12 text-base"
+              />
+            </div>
+            <Button type="submit" className="h-12 w-full text-base font-bold" disabled={loginLoading}>
+              {loginLoading ? "Signing in…" : <><span>Enter workspace</span><ArrowUpRight className="h-4 w-4" /></>}
+            </Button>
+          </form>
+        </TabsContent>
 
-          <Card className="border-0 shadow-soft">
-            <CardHeader className="space-y-1 pb-4">
-              <CardTitle className="text-2xl font-bold tracking-tight">
-                {tab === "signin" ? "Welcome back" : "Create account"}
-              </CardTitle>
-              <CardDescription>
-                {tab === "signin" ? "Sign in to your gym dashboard" : "Sign up to start managing your gym"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={tab} onValueChange={(v) => setTab(v as "signin" | "signup")}>
-                <TabsList className="w-full mb-6">
-                  <TabsTrigger value="signin" className="flex-1">Sign In</TabsTrigger>
-                  <TabsTrigger value="signup" className="flex-1">Sign Up</TabsTrigger>
-                </TabsList>
-
-                {/* ── Sign In ── */}
-                <TabsContent value="signin">
-                  <form onSubmit={handleSignIn} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="login-email">Email</Label>
-                      <Input id="login-email" type="email" placeholder="admin@gym.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required className="h-11" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="login-password">Password</Label>
-                      <Input id="login-password" type="password" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required className="h-11" />
-                    </div>
-                    <Button type="submit" className="w-full h-11 text-base font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 transition-all" disabled={loginLoading}>
-                      {loginLoading ? <span className="flex items-center gap-2"><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Signing in...</span> : "Sign In"}
-                    </Button>
-                  </form>
-                </TabsContent>
-
-                {/* ── Sign Up ── */}
-                <TabsContent value="signup">
-                  <form onSubmit={handleSignUp} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-name">Full Name</Label>
-                      <Input id="signup-name" placeholder="John Doe" value={signupName} onChange={e => setSignupName(e.target.value)} required className="h-11" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-email">Email</Label>
-                      <Input id="signup-email" type="email" placeholder="admin@gym.com" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} required className="h-11" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-password">Password</Label>
-                      <Input id="signup-password" type="password" placeholder="Min. 6 characters" value={signupPassword} onChange={e => setSignupPassword(e.target.value)} required className="h-11" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-confirm">Confirm Password</Label>
-                      <Input id="signup-confirm" type="password" placeholder="Re-enter password" value={signupConfirm} onChange={e => setSignupConfirm(e.target.value)} required className="h-11" />
-                    </div>
-                    <Button type="submit" className="w-full h-11 text-base font-semibold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 transition-all" disabled={signupLoading}>
-                      {signupLoading ? <span className="flex items-center gap-2"><span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating account...</span> : "Create Account"}
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </motion.div>
+        {/* ── Sign Up ── */}
+        <TabsContent value="signup" className="mt-6">
+          <div className="mb-5">
+            <h2 className="font-display text-xl font-bold">Build your workspace</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Start with your admin account.</p>
+          </div>
+          <form onSubmit={handleSignUp} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-name">Full Name</Label>
+              <Input
+                id="signup-name"
+                autoComplete="name"
+                placeholder="John Doe"
+                value={signupName}
+                onChange={(e) => setSignupName(e.target.value)}
+                required
+                className="h-12 text-base"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-email">Email</Label>
+              <Input
+                id="signup-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="admin@gym.com"
+                value={signupEmail}
+                onChange={(e) => setSignupEmail(e.target.value)}
+                required
+                className="h-12 text-base"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-password">Password</Label>
+              <Input
+                id="signup-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Min. 6 characters"
+                value={signupPassword}
+                onChange={(e) => setSignupPassword(e.target.value)}
+                required
+                className="h-12 text-base"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="signup-confirm">Confirm Password</Label>
+              <Input
+                id="signup-confirm"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Re-enter password"
+                value={signupConfirm}
+                onChange={(e) => setSignupConfirm(e.target.value)}
+                required
+                className="h-12 text-base"
+              />
+            </div>
+            <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={signupLoading}>
+              {signupLoading ? "Creating account…" : "Create Account"}
+            </Button>
+          </form>
+        </TabsContent>
+      </Tabs>
+      </div>
+      <p className="pt-4 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        Built for the training floor
+      </p>
       </div>
     </div>
   );

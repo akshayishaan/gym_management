@@ -12,6 +12,7 @@ export interface Gym {
   phone?: string;
   email?: string;
   currency: string;
+  timezone: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -22,7 +23,7 @@ async function fetchGyms(): Promise<Gym[]> {
   const res = await fetch("/api/gyms");
   if (!res.ok) throw new Error("Failed to fetch gyms");
   const data = await res.json();
-  return Array.isArray(data) ? data : [];
+  return Array.isArray(data) ? data : data.gyms || [];
 }
 
 /**

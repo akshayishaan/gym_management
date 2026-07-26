@@ -1,19 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Users, CreditCard, MessageCircle, BarChart3 } from "lucide-react";
+import { UserPlus, CreditCard, BellRing, ChartNoAxesCombined } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const actions = [
-  {
-    label: "Add Member",
-    href: "/dashboard/members/new",
-    icon: Users,
-    iconClass: "bg-primary/10 text-primary",
-  },
+const LINK_ACTIONS = [
   {
     label: "Record Payment",
     href: "/dashboard/payments",
@@ -23,50 +14,44 @@ const actions = [
   {
     label: "Send Reminders",
     href: "/dashboard/members?status=expiring",
-    icon: MessageCircle,
+    icon: BellRing,
     iconClass: "bg-warning/10 text-warning",
   },
   {
-    label: "View Reports",
+    label: "Reports",
     href: "/dashboard/reports",
-    icon: BarChart3,
-    iconClass: "bg-muted text-muted-foreground",
+    icon: ChartNoAxesCombined,
+    iconClass: "bg-accent text-accent-foreground",
   },
-];
+] as const;
 
-export function QuickActions() {
+const tileClass = "flex min-w-0 flex-1 flex-col items-center gap-2.5 text-center active:scale-95";
+
+interface QuickActionsProps {
+  /** Opens the Add Member bottom sheet instead of navigating to a route. */
+  onAddMember: () => void;
+}
+
+export function QuickActions({ onAddMember }: QuickActionsProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.1 }}
-    >
-      <Card className="border-0 shadow-card">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3">
-            {actions.map((action, i) => (
-              <motion.div
-                key={action.label}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.15 + i * 0.05 }}
-              >
-                <Link href={action.href}>
-                  <Button
-                    variant="outline"
-                    className="gap-2 h-10 px-4"
-                  >
-                    <div className={cn("p-1 rounded-md", action.iconClass)}>
-                      <action.icon className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-sm font-medium">{action.label}</span>
-                  </Button>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
+    <div className="app-surface flex items-start justify-between rounded-[1.75rem] px-3 py-4">
+      <button type="button" onClick={onAddMember} className={tileClass}>
+        <span className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] bg-primary text-primary-foreground shadow-md shadow-primary/20">
+          <UserPlus className="h-5 w-5" />
+        </span>
+        <span className="text-[11px] font-bold leading-tight">Add</span>
+      </button>
+
+      {LINK_ACTIONS.map((action) => (
+        <Link key={action.label} href={action.href} className={tileClass}>
+          <span className={cn("flex h-12 w-12 items-center justify-center rounded-[1.1rem]", action.iconClass)}>
+            <action.icon className="h-5 w-5" />
+          </span>
+          <span className="line-clamp-1 text-[11px] font-bold leading-tight">
+            {action.label === "Record Payment" ? "Payment" : action.label === "Send Reminders" ? "Remind" : action.label}
+          </span>
+        </Link>
+      ))}
+    </div>
   );
 }

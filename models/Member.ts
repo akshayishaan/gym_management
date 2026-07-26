@@ -11,8 +11,8 @@ export interface IMember extends Document {
   gender?: "male" | "female" | "other";
   planId?: mongoose.Types.ObjectId;
   planName?: string;
-  membershipStart?: Date;
-  membershipExpiry?: Date;
+  membershipStart?: string;
+  membershipExpiry?: string;
   notes?: string;
   emergencyContact?: string;
   dueAmount: number;    // cached ledger balance: sum(plan prices) - sum(payments)
@@ -33,8 +33,8 @@ const MemberSchema = new Schema<IMember>(
     gender: { type: String, enum: ["male", "female", "other"] },
     planId: { type: Schema.Types.ObjectId, ref: "Plan" },
     planName: { type: String },
-    membershipStart: { type: Date },
-    membershipExpiry: { type: Date },
+    membershipStart: { type: String },
+    membershipExpiry: { type: String },
     notes: { type: String },
     emergencyContact: { type: String },
     dueAmount: { type: Number, default: 0 },
@@ -47,6 +47,7 @@ const MemberSchema = new Schema<IMember>(
 MemberSchema.index({ gymId: 1, membershipExpiry: 1 });
 MemberSchema.index({ gymId: 1, planName: 1 });
 MemberSchema.index({ gymId: 1, createdAt: -1 });
+MemberSchema.index({ gymId: 1, isActive: 1, membershipExpiry: 1, planId: 1 });
 
 const Member: Model<IMember> =
   mongoose.models.Member || mongoose.model<IMember>("Member", MemberSchema);

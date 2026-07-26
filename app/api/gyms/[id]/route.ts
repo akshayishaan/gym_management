@@ -9,6 +9,7 @@ import Payment from "@/models/Payment";
 import Plan from "@/models/Plan";
 import Membership from "@/models/Membership";
 import ActivityLog from "@/models/ActivityLog";
+import LifecycleMutation from "@/models/LifecycleMutation";
 import { gymUpdateSchema } from "@/lib/validators/gym";
 
 export const GET = apiHandlerWithParams<{ id: string }>(
@@ -53,6 +54,7 @@ export const DELETE = apiHandlerWithParams<{ id: string }>(
     await Payment.deleteMany({ gymId: id });
     await Plan.deleteMany({ gymId: id });
     await Membership.deleteMany({ gymId: id });
+    await LifecycleMutation.deleteMany({ gymId: id });
     await ActivityLog.deleteMany({ gymId: id });
     await Gym.findByIdAndDelete(id);
 

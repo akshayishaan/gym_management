@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apiHandlerWithParams } from "@/lib/apiHandler";
-import { ForbiddenError } from "@/lib/withAuth";
+import { getGymFilter } from "@/lib/withAuth";
 import { SessionUser } from "@/lib/session";
 import Member from "@/models/Member";
 import ActivityLog from "@/models/ActivityLog";
@@ -8,20 +8,15 @@ import { memberUpdateSchema } from "@/lib/validators/member";
 
 export const GET = apiHandlerWithParams<{ id: string }>(
   async (_req, user, { id }) => {
-    const member = await Member.findById(id).lean();
+    const member = await Member.findOne({ _id: id, ...getGymFilter(user) }).lean();
     if (!member) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    if (String((member as { gymId?: unknown }).gymId) !== user.selectedGymId) {
-      throw new ForbiddenError("You can only access members in your gym");
-    }
-
     return NextResponse.json(member);
   }
 );
 
 export const PUT = apiHandlerWithParams<{ id: string }>(
   async (req, user, { id }) => {
-    const gymId = user.selectedGymId!;
+    const gymId = getGymFilter(user).gymId;
     const body = await req.json();
     const validated = memberUpdateSchema.parse(body);
 
@@ -48,7 +43,7 @@ export const PUT = apiHandlerWithParams<{ id: string }>(
 
 export const DELETE = apiHandlerWithParams<{ id: string }>(
   async (_req, user, { id }) => {
-    const gymId = user.selectedGymId!;
+    const gymId = getGymFilter(user).gymId;
     // Soft delete: members are never removed from the DB (preserves revenue /
     // payment history). Setting isActive=false hides them from lists, counts,
     // reports, and the payment member-picker. Restore via PUT { isActive: true }.

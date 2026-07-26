@@ -2,17 +2,32 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
-  useCallback,
-  ReactNode,
+  type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getGymCookie, setGymCookie } from "@/lib/gymCookie";
+import { useGyms } from "@/lib/hooks/useGyms";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface GymSettings {
   gymName: string;
   currency: string;
+  timezone: string;
   primaryColor: string;
   address?: string;
   phone?: string;
@@ -20,94 +35,131 @@ interface GymSettings {
 }
 
 interface GymContextValue extends GymSettings {
-  /** Currently selected gym ID. Initialised from the browser cookie so it
-   *  survives page refresh. Null until the first fetch resolves (or no gym
-   *  has ever been selected). */
   selectedGymId: string | null;
-  /** Switch to a different gym. Writes the cookie, updates context state,
-   *  and re-fetches gym settings — all synchronously / without an API call
-   *  for the switch itself. Call router.refresh() in the component if server
-   *  components need to re-render with the new gym's data. */
   switchGym: (gymId: string) => void;
+  registerScopedForm: (registration: ScopedFormRegistration) => () => void;
 }
 
-const defaultSettings: GymContextValue = {
+interface ScopedFormRegistration {
+  isDirty: () => boolean;
+  reset: () => void;
+}
+
+const DEFAULT_SETTINGS: GymSettings = {
   gymName: "My Gym",
   currency: "INR",
+  timezone: "Asia/Kolkata",
   primaryColor: "#6366f1",
-  selectedGymId: null,
-  switchGym: () => {},
 };
 
-const GymSettingsContext = createContext<GymContextValue>(defaultSettings);
+const GymSettingsContext = createContext<GymContextValue>({
+  ...DEFAULT_SETTINGS,
+  selectedGymId: null,
+  switchGym: () => {},
+  registerScopedForm: () => () => {},
+});
 
 export function GymSettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<GymSettings>({
-    gymName: defaultSettings.gymName,
-    currency: defaultSettings.currency,
-    primaryColor: defaultSettings.primaryColor,
-  });
-
-  // Always null on the server (no document). Populated on the client via the
-  // cookie effect below — kept separate from fetchSettings so that an in-flight
-  // settings fetch can never overwrite the user's explicit gym selection.
+  const queryClient = useQueryClient();
+  const { data: gyms = [] } = useGyms();
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
+  const [pendingGymId, setPendingGymId] = useState<string | null>(null);
+  const scopedFormsRef = useRef(new Map<symbol, ScopedFormRegistration>());
 
-  // Restore selected gym from cookie on client mount — synchronous, no API call.
-  // Runs before fetchSettings so the sidebar shows the right gym immediately.
   useEffect(() => {
-    const id = getGymCookie();
-    if (id) setSelectedGymId(id);
-  }, []);
-
-  const fetchSettings = useCallback(() => {
-    fetch("/api/gyms")
-      .then((r) => r.json())
-      .then((data) => {
-        const gyms: Array<Record<string, unknown>> = data.gyms || [];
-        if (!gyms.length) return;
-        // Prefer the gym matching the current cookie; fall back to first.
-        const cookieId = getGymCookie();
-        const gym = (cookieId && gyms.find((g) => g._id === cookieId)) || gyms[0];
-        if (!gym) return;
-        setSettings({
-          gymName: (gym.name as string) || defaultSettings.gymName,
-          currency: (gym.currency as string) || defaultSettings.currency,
-          primaryColor: (gym.primaryColor as string) || defaultSettings.primaryColor,
-          address: gym.address as string | undefined,
-          phone: gym.phone as string | undefined,
-          email: gym.email as string | undefined,
-        });
-        // Only initialise the cookie on first visit (no cookie set yet).
-        if (gym._id && !getGymCookie()) {
-          setGymCookie(gym._id as string);
-          setSelectedGymId(gym._id as string);
-        }
-      })
-      .catch(() => {
-        // Keep defaults on error
-      });
+    const cookieGymId = getGymCookie();
+    if (cookieGymId) setSelectedGymId(cookieGymId);
   }, []);
 
   useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
+    if (gyms.length === 0) return;
+    const selectedIsAuthorized = selectedGymId
+      && gyms.some((gym) => gym._id === selectedGymId);
+    if (selectedIsAuthorized) return;
 
-  /** Pure client-side switch — no API call needed.
-   *  The cookie is read by the server on every request (lib/selectedGym.ts)
-   *  to scope data queries to the correct gym. */
-  const switchGym = useCallback(
-    (gymId: string) => {
-      setGymCookie(gymId);     // persist across refresh
-      setSelectedGymId(gymId); // update context → all subscribers re-render instantly
-      fetchSettings();         // update gymName / currency / color for the new gym
-    },
-    [fetchSettings]
+    const cookieGymId = getGymCookie();
+    const fallback = gyms.find((gym) => gym._id === cookieGymId) ?? gyms[0];
+    setGymCookie(fallback._id);
+    setSelectedGymId(fallback._id);
+  }, [gyms, selectedGymId]);
+
+  const selectedGym = useMemo(
+    () => gyms.find((gym) => gym._id === selectedGymId),
+    [gyms, selectedGymId]
   );
 
+  const registerScopedForm = useCallback((registration: ScopedFormRegistration) => {
+    const key = Symbol("gym-scoped-form");
+    scopedFormsRef.current.set(key, registration);
+    return () => scopedFormsRef.current.delete(key);
+  }, []);
+
+  const performGymSwitch = useCallback((gymId: string) => {
+    for (const registration of scopedFormsRef.current.values()) {
+      registration.reset();
+    }
+    setGymCookie(gymId);
+    setSelectedGymId(gymId);
+    void queryClient.invalidateQueries({ queryKey: ["gym", gymId] });
+  }, [queryClient]);
+
+  const switchGym = useCallback((gymId: string) => {
+    if (gymId === selectedGymId || !gyms.some((gym) => gym._id === gymId)) return;
+    const hasDirtyForm = Array.from(scopedFormsRef.current.values())
+      .some((registration) => registration.isDirty());
+    if (hasDirtyForm) {
+      setPendingGymId(gymId);
+      return;
+    }
+    performGymSwitch(gymId);
+  }, [gyms, performGymSwitch, selectedGymId]);
+
+  const settings: GymSettings = selectedGym
+    ? {
+        gymName: selectedGym.name || DEFAULT_SETTINGS.gymName,
+        currency: selectedGym.currency || DEFAULT_SETTINGS.currency,
+        timezone: selectedGym.timezone || DEFAULT_SETTINGS.timezone,
+        primaryColor: selectedGym.primaryColor || DEFAULT_SETTINGS.primaryColor,
+        address: selectedGym.address,
+        phone: selectedGym.phone,
+        email: selectedGym.email,
+      }
+    : DEFAULT_SETTINGS;
+
   return (
-    <GymSettingsContext.Provider value={{ ...settings, selectedGymId, switchGym }}>
+    <GymSettingsContext.Provider value={{
+      ...settings,
+      selectedGymId,
+      switchGym,
+      registerScopedForm,
+    }}>
       {children}
+      <AlertDialog
+        open={!!pendingGymId}
+        onOpenChange={(open) => {
+          if (!open) setPendingGymId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes and switch Gym?</AlertDialogTitle>
+            <AlertDialogDescription>
+              An open form has unsaved changes. Switching Gym will close it and reset its fields.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingGymId) performGymSwitch(pendingGymId);
+                setPendingGymId(null);
+              }}
+            >
+              Discard and switch
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </GymSettingsContext.Provider>
   );
 }
@@ -116,10 +168,26 @@ export function useGymSettings() {
   return useContext(GymSettingsContext);
 }
 
-/**
- * Returns the currency symbol for the current gym's currency setting.
- * Use this instead of hardcoding ₹ in the UI.
- */
+export function useGymScopedFormGuard(options: {
+  active: boolean;
+  dirty: boolean;
+  reset: () => void;
+}) {
+  const { registerScopedForm } = useGymSettings();
+  const dirtyRef = useRef(options.dirty);
+  const resetRef = useRef(options.reset);
+  dirtyRef.current = options.dirty;
+  resetRef.current = options.reset;
+
+  useEffect(() => {
+    if (!options.active) return;
+    return registerScopedForm({
+      isDirty: () => dirtyRef.current,
+      reset: () => resetRef.current(),
+    });
+  }, [options.active, registerScopedForm]);
+}
+
 export function useCurrencySymbol(): string {
   const { currency } = useGymSettings();
   const symbols: Record<string, string> = {

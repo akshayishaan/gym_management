@@ -77,10 +77,10 @@ const config: Config = {
   			xl: 'calc(var(--radius) + 4px)',
   			'2xl': 'calc(var(--radius) + 8px)'
   		},
-  		boxShadow: {
-  			soft: '0 2px 15px -3px rgba(0,0,0,0.07), 0 10px 20px -2px rgba(0,0,0,0.04)',
-  			card: '0 0 0 1px hsl(var(--border)), 0 2px 8px -2px rgba(0,0,0,0.06)',
-  			'card-hover': '0 0 0 1px hsl(var(--border)), 0 8px 24px -4px rgba(0,0,0,0.08)',
+		boxShadow: {
+			soft: '0 16px 40px -24px hsl(var(--foreground) / 0.35)',
+			card: '0 14px 34px -26px hsl(var(--foreground) / 0.42), 0 2px 8px -5px hsl(var(--foreground) / 0.18)',
+			'card-hover': '0 18px 42px -25px hsl(var(--foreground) / 0.48)',
   			glow: '0 0 20px -5px hsl(var(--primary) / 0.4)'
   		},
   		keyframes: {

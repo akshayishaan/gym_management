@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
 import { SessionUser, getSessionUser } from "@/lib/session";
 import Staff from "@/models/Staff";
+import { Types } from "mongoose";
 
 export class AuthError extends Error {
   status = 401;
@@ -31,7 +32,7 @@ export async function requireAuth(): Promise<SessionUser> {
   if (!user) throw new AuthError();
   await connectDB();
   const staff = await Staff.findById(user.id).select("gymIds").lean();
-  user.gymIds = (staff?.gymIds ?? []).map(
+  user.gymIds = (staff?.gymIds ?? []).filter(Boolean).map(
     (g: { toString: () => string }) => g.toString()
   );
   return user;
@@ -42,9 +43,9 @@ export async function requireAuth(): Promise<SessionUser> {
  * Always scopes by the active gym (selectedGymId or first gym).
  * Throws ForbiddenError if the user has no gym or the cookie value is invalid.
  */
-export function getGymFilter(user: SessionUser): Record<string, string> {
+export function getGymFilter(user: SessionUser): { gymId: Types.ObjectId } {
   const activeGymId = user.selectedGymId || user.gymIds[0];
   if (!activeGymId) throw new ForbiddenError("No gym selected");
   if (!user.gymIds.includes(activeGymId)) throw new ForbiddenError("Access denied to this gym");
-  return { gymId: activeGymId };
+  return { gymId: new Types.ObjectId(activeGymId) };
 }

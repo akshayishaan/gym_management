@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, ForbiddenError } from "@/lib/withAuth";
 import { ZodError } from "zod";
 import { getSelectedGymId } from "@/lib/selectedGym";
+import { DomainError } from "@/lib/domainError";
 
 /**
  * Standardized API error response shape.
@@ -86,6 +87,9 @@ export function apiHandlerWithParams<TParams>(
  * Centralized error handler used by both apiHandler and apiHandlerWithParams.
  */
 function handleError(err: unknown): NextResponse<ApiError> {
+  if (err instanceof DomainError) {
+    return NextResponse.json<ApiError>({ error: err.message }, { status: err.status });
+  }
   if (err instanceof AuthError) {
     return NextResponse.json<ApiError>(
       { error: err.message },

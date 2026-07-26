@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { isValidTimeZone } from "@/lib/membershipCalendar";
+
+const timeZoneSchema = z.string().refine(isValidTimeZone, "Invalid IANA timezone");
 
 export const gymCreateSchema = z.object({
   name: z.string().min(1, "Gym name is required").max(200).trim(),
@@ -8,6 +11,7 @@ export const gymCreateSchema = z.object({
   phone: z.string().max(20).optional(),
   email: z.string().email().optional(),
   currency: z.string().length(3).default("INR"),
+  timezone: timeZoneSchema.default("Asia/Kolkata"),
   expiryReminderDays: z.number().int().min(1).max(90).default(7),
   isActive: z.boolean().default(true),
 });
@@ -20,6 +24,7 @@ export const gymUpdateSchema = z.object({
   phone: z.string().max(20).optional(),
   email: z.string().email().optional(),
   currency: z.string().length(3).optional(),
+  timezone: timeZoneSchema.optional(),
   expiryReminderDays: z.number().int().min(1).max(90).optional(),
   isActive: z.boolean().optional(),
 });

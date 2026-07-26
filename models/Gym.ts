@@ -8,6 +8,7 @@ export interface IGym extends Document {
   phone?: string;
   email?: string;
   currency: string;
+  timezone: string;
   expiryReminderDays: number;
   isActive: boolean;
   ownerId?: mongoose.Types.ObjectId;
@@ -24,6 +25,7 @@ const GymSchema = new Schema<IGym>(
     phone: { type: String },
     email: { type: String },
     currency: { type: String, default: "INR" },
+    timezone: { type: String, default: "Asia/Kolkata" },
     expiryReminderDays: { type: Number, default: 7 },
     isActive: { type: Boolean, default: true },
     ownerId: { type: Schema.Types.ObjectId, ref: "Staff", index: true },

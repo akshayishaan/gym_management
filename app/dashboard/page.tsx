@@ -1,27 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { StatCard } from "@/components/dashboard/StatCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
-import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { MemberTrendChart } from "@/components/dashboard/MemberTrendChart";
+import { MemberForm } from "@/components/dashboard/MemberForm";
 import {
   Users,
-  TrendingUp,
   AlertTriangle,
-  UserX,
   MessageCircle,
   Phone,
   ArrowRight,
   Wallet,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   formatCurrency,
@@ -32,46 +25,7 @@ import {
 } from "@/lib/utils";
 import Link from "next/link";
 import { useGymSettings } from "@/lib/useGymSettings";
-
-interface DashboardData {
-  totalMembers: number;
-  activeMembers: number;
-  expiredMembers: number;
-  expiringMembers: number;
-  monthRevenue: number;
-  recentPayments: {
-    _id: string;
-    memberName: string;
-    amount: number;
-    paidAt: string;
-    method: string;
-  }[];
-  expiringList: {
-    _id: string;
-    name: string;
-    phone: string;
-    membershipExpiry: string;
-    planName?: string;
-  }[];
-}
-
-// Generate mock chart data from available metrics
-function generateRevenueData(monthRevenue: number) {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-  return months.map((month, i) => ({
-    month,
-    revenue: Math.max(0, Math.round(monthRevenue * (0.6 + Math.random() * 0.8))),
-  }));
-}
-
-function generateMemberTrendData(totalMembers: number, activeMembers: number) {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-  return months.map((month) => ({
-    month,
-    active: Math.round(activeMembers * (0.7 + Math.random() * 0.3)),
-    new: Math.round(totalMembers * 0.05 + Math.random() * 10),
-  }));
-}
+import { useDashboard, useInvalidateDashboard } from "@/lib/hooks/useDashboard";
 
 function getInitials(name: string) {
   return name
@@ -82,289 +36,202 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 },
-  },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
-};
-
 export default function DashboardPage() {
-  const { data: session } = useSession();
-  const router = useRouter();
-  const { selectedGymId } = useGymSettings();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const isSuperAdmin = (session?.user as { role?: string })?.role === "superadmin";
-
-  useEffect(() => {
-    if (isSuperAdmin) {
-      router.replace("/dashboard/superadmin");
-    }
-  }, [isSuperAdmin, router]);
-
-  useEffect(() => {
-    if (isSuperAdmin) return;
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      });
-  }, [isSuperAdmin, selectedGymId]);
-
-  if (isSuperAdmin) return null;
+  const { currency, timezone } = useGymSettings();
+  const { data, isLoading: loading } = useDashboard();
+  const invalidateDashboard = useInvalidateDashboard();
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-10 w-48 bg-muted rounded-lg animate-pulse" />
-        <div className="h-14 bg-muted rounded-xl animate-pulse" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 bg-card rounded-2xl border animate-pulse" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-80 bg-card rounded-2xl border animate-pulse" />
-          ))}
-        </div>
+        <div className="h-52 animate-pulse rounded-[2rem] bg-foreground/10" />
+        <div className="h-24 animate-pulse rounded-[1.75rem] bg-card" />
+        <div className="h-64 animate-pulse rounded-[1.75rem] bg-card" />
       </div>
     );
   }
 
   if (!data) return null;
 
-  const revenueData = generateRevenueData(data.monthRevenue);
-  const memberTrendData = generateMemberTrendData(data.totalMembers, data.activeMembers);
-
   const reminderMessage = (name: string, expiry: string) =>
     `Hi ${name}, your gym membership expires on ${formatDate(expiry)}. Please renew to continue your fitness journey! 💪`;
 
   return (
-    <motion.div
-      variants={container}
-      initial="hidden"
-      animate="show"
-      className="space-y-6"
-    >
-      <motion.div variants={item}>
-        <PageHeader
-          title="Dashboard"
-          description="Welcome back! Here's your gym overview."
-        />
-      </motion.div>
+    <div className="space-y-6">
+      <section className="relative overflow-hidden rounded-[2rem] bg-foreground p-5 text-background shadow-xl shadow-foreground/15">
+        <div className="absolute -right-12 -top-16 h-40 w-40 rounded-full bg-primary/70 blur-2xl" />
+        <div className="absolute -bottom-20 -left-8 h-36 w-36 rounded-full bg-success/35 blur-2xl" />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-background/55">
+                Revenue this month
+              </p>
+              <p className="mt-1 font-display text-[2rem] font-extrabold tracking-[-0.05em]">
+                {formatCurrency(data.monthRevenue, currency)}
+              </p>
+            </div>
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-background/10 text-primary backdrop-blur">
+              <ArrowUpRight className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mt-7 grid grid-cols-3 divide-x divide-background/10 rounded-2xl bg-background/[0.07] py-3 backdrop-blur">
+            <div className="px-3">
+              <p className="text-xl font-extrabold">{data.totalMembers}</p>
+              <p className="mt-0.5 text-[10px] font-semibold text-background/55">Members</p>
+            </div>
+            <div className="px-3">
+              <p className="text-xl font-extrabold text-success">{data.activeMembers}</p>
+              <p className="mt-0.5 text-[10px] font-semibold text-background/55">Active</p>
+            </div>
+            <div className="px-3">
+              <p className="text-xl font-extrabold text-warning">{data.expiringMembers}</p>
+              <p className="mt-0.5 text-[10px] font-semibold text-background/55">Expiring</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <motion.div variants={item}>
-        <QuickActions />
-      </motion.div>
+      <section className="space-y-3">
+        <p className="app-section-label px-1">Quick actions</p>
+        <QuickActions onAddMember={() => setAddMemberOpen(true)} />
+      </section>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Members"
-          value={data.totalMembers}
-          icon={Users}
-          gradient="blue"
-          description="All time registrations"
-          delay={0}
-        />
-        <StatCard
-          title="Active Members"
-          value={data.activeMembers}
-          icon={TrendingUp}
-          gradient="emerald"
-          description="Valid membership"
-          trend={5}
-          delay={0.05}
-        />
-        <StatCard
-          title="Expiring Soon"
-          value={data.expiringMembers}
-          icon={AlertTriangle}
-          gradient="amber"
-          description="Within 7 days"
-          delay={0.1}
-        />
-        <StatCard
-          title="This Month Revenue"
-          value={formatCurrency(data.monthRevenue)}
-          icon={Wallet}
-          gradient="orange"
-          description="Collections so far"
-          trend={12}
-          delay={0.15}
-        />
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RevenueChart data={revenueData} />
-        <MemberTrendChart data={memberTrendData} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Expiring Members */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-        >
-          <Card className="border-0 shadow-card hover:shadow-card-hover transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-amber-500/10">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                </div>
-                <CardTitle className="text-base font-semibold">Expiring Soon</CardTitle>
+      {/* Expiring Members */}
+      <Card className="overflow-hidden border-0 shadow-card">
+        <CardHeader className="flex flex-row items-center justify-between px-4 pb-2 pt-4">
+          <div className="flex items-center gap-2">
+            <div className="rounded-xl bg-warning/15 p-2">
+              <AlertTriangle className="h-4 w-4 text-warning-foreground dark:text-warning" />
+            </div>
+            <CardTitle className="text-base font-semibold">Expiring Soon</CardTitle>
+          </div>
+          <Link href="/dashboard/members?status=expiring">
+            <Button variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs text-primary">
+              All <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="px-3 pb-3">
+          {(data.expiringList?.length ?? 0) === 0 ? (
+            <div className="py-8 text-center">
+              <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success">
+                <Users className="h-6 w-6" />
               </div>
-              <Link href="/dashboard/members?status=expiring">
-                <Button variant="ghost" size="sm" className="gap-1">
-                  View all <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent>
-              {(data.expiringList?.length ?? 0) === 0 ? (
-                <div className="text-center py-8">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-success/10 text-success mb-3">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <p className="text-sm font-medium">No members expiring soon</p>
-                  <p className="text-xs text-muted-foreground mt-1">All memberships are up to date</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {(data.expiringList ?? []).map((m) => {
-                    const days = daysUntilExpiry(m.membershipExpiry);
-                    const msg = reminderMessage(m.name, m.membershipExpiry);
-                    return (
-                      <div
-                        key={m._id}
-                        className="flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <Avatar className="h-8 w-8 shrink-0">
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                              {getInitials(m.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium text-sm truncate">{m.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {m.planName || "No plan"} · {formatDate(m.membershipExpiry)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Badge
-                            variant={days <= 3 ? "destructive" : "warning"}
-                            className="text-xs"
-                          >
-                            {days === 0 ? "Today" : `${days}d`}
-                          </Badge>
-                          <a
-                            href={buildWhatsAppLink(m.phone, msg)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-success hover:bg-success/10"
-                              title="WhatsApp"
-                            >
-                              <MessageCircle className="h-3.5 w-3.5" />
-                            </Button>
-                          </a>
-                          <a href={buildSmsLink(m.phone, msg)}>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-primary hover:bg-primary/10"
-                              title="SMS"
-                            >
-                              <Phone className="h-3.5 w-3.5" />
-                            </Button>
-                          </a>
-                        </div>
+              <p className="text-sm font-medium">No members expiring soon</p>
+              <p className="mt-1 text-xs text-muted-foreground">All memberships are up to date</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {(data.expiringList ?? []).map((m) => {
+                const days = daysUntilExpiry(m.membershipExpiry, timezone);
+                const msg = reminderMessage(m.name, m.membershipExpiry);
+                return (
+                  <div
+                    key={m._id}
+                    className="flex min-h-[4.25rem] items-center justify-between gap-3 rounded-xl px-1 py-2.5 active:bg-muted/60"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <Avatar className="h-10 w-10 shrink-0">
+                        <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                          {getInitials(m.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{m.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {m.planName || "No plan"} · {formatDate(m.membershipExpiry)}
+                        </p>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Recent Payments */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
-        >
-          <Card className="border-0 shadow-card hover:shadow-card-hover transition-shadow duration-300">
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-emerald-500/10">
-                  <Wallet className="h-4 w-4 text-emerald-500" />
-                </div>
-                <CardTitle className="text-base font-semibold">Recent Payments</CardTitle>
-              </div>
-              <Link href="/dashboard/payments">
-                <Button variant="ghost" size="sm" className="gap-1">
-                  View all <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent>
-              {(data.recentPayments?.length ?? 0) === 0 ? (
-                <div className="text-center py-8">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted text-muted-foreground mb-3">
-                    <Wallet className="h-6 w-6" />
-                  </div>
-                  <p className="text-sm font-medium">No payments yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Record your first payment to see it here</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(data.recentPayments ?? []).map((p) => (
-                    <div
-                      key={p._id}
-                      className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Avatar className="h-8 w-8 shrink-0">
-                          <AvatarFallback className="bg-success/10 text-success text-xs font-semibold">
-                            {getInitials(p.memberName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{p.memberName}</p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {p.method.replace("_", " ")} · {formatDate(p.paidAt)}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="font-semibold text-sm text-emerald-600 shrink-0">
-                        {formatCurrency(p.amount)}
-                      </span>
                     </div>
-                  ))}
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Badge variant={days <= 3 ? "destructive" : "warning"} className="text-xs">
+                        {days === 0 ? "Today" : `${days}d`}
+                      </Badge>
+                      <a href={buildWhatsAppLink(m.phone, msg)} target="_blank" rel="noreferrer">
+                        <Button aria-label={`WhatsApp ${m.name}`} size="icon" variant="ghost" className="h-9 w-9 rounded-xl text-success hover:bg-success/10">
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </Button>
+                      </a>
+                      <a href={buildSmsLink(m.phone, msg)}>
+                        <Button aria-label={`Text ${m.name}`} size="icon" variant="ghost" className="h-9 w-9 rounded-xl text-primary hover:bg-primary/10">
+                          <Phone className="h-3.5 w-3.5" />
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Recent Payments */}
+      <Card className="overflow-hidden border-0 shadow-card">
+        <CardHeader className="flex flex-row items-center justify-between px-4 pb-2 pt-4">
+          <div className="flex items-center gap-2">
+            <div className="rounded-xl bg-success/10 p-2">
+              <Wallet className="h-4 w-4 text-success" />
+            </div>
+            <CardTitle className="text-base font-semibold">Recent Payments</CardTitle>
+          </div>
+          <Link href="/dashboard/payments">
+            <Button variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs text-primary">
+              All <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="px-3 pb-3">
+          {(data.recentPayments?.length ?? 0) === 0 ? (
+            <div className="py-8 text-center">
+              <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Wallet className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-medium">No payments yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Record your first payment to see it here</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60">
+              {(data.recentPayments ?? []).map((p) => (
+                <div
+                  key={p._id}
+                  className="flex min-h-[4.25rem] items-center justify-between gap-3 rounded-xl px-1 py-2.5 active:bg-muted/60"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarFallback className="bg-success/10 text-xs font-semibold text-success">
+                        {getInitials(p.memberName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{p.memberName}</p>
+                      <p className="truncate text-xs capitalize text-muted-foreground">
+                        {p.method.replace("_", " ")} · {formatDate(p.paidAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-sm font-bold text-success">
+                    {formatCurrency(p.amount, currency)}
+                  </span>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </motion.div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <MemberForm
+        mode="create"
+        variant="sheet"
+        open={addMemberOpen}
+        onOpenChange={setAddMemberOpen}
+        onSuccess={() => {
+          setAddMemberOpen(false);
+          void invalidateDashboard();
+        }}
+      />
+    </div>
   );
 }

@@ -1,6 +1,10 @@
 import { z } from "zod";
+import { isDateOnly } from "@/lib/membershipCalendar";
+
+const membershipDateSchema = z.string().refine(isDateOnly, "Use a valid YYYY-MM-DD date");
 
 export const memberCreateSchema = z.object({
+  requestId: z.string().uuid("Invalid request ID"),
   name: z.string().min(1, "Name is required").max(100).trim(),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().min(1, "Phone is required").max(20).trim(),
@@ -11,13 +15,21 @@ export const memberCreateSchema = z.object({
   planId: z.string().optional(),
   // membershipStart may be supplied by the client; membershipExpiry is ALWAYS
   // computed server-side from plan.durationDays — never accepted from client.
-  membershipStart: z.string().optional(),
+  membershipStart: membershipDateSchema.optional(),
   notes: z.string().max(1000).optional(),
   emergencyContact: z.string().max(20).optional(),
   // Onboarding payment fields — stripped before Member.create, used to
   // derive dueAmount and create the initial Payment + Membership records.
   amountPaid: z.number().min(0).optional(),
   paymentMethod: z.enum(["cash", "card", "upi", "bank_transfer", "other"]).optional(),
+}).superRefine((value, context) => {
+  if (!value.planId && (value.membershipStart || value.amountPaid !== undefined || value.paymentMethod)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["planId"],
+      message: "Select a plan before setting Membership or Payment details",
+    });
+  }
 });
 
 export const memberUpdateSchema = z.object({
@@ -28,10 +40,6 @@ export const memberUpdateSchema = z.object({
   photo: z.string().url().optional(),
   dateOfBirth: z.string().optional(),
   gender: z.enum(["male", "female", "other"]).optional(),
-  planId: z.string().optional(),
-  planName: z.string().max(100).optional(),
-  membershipStart: z.string().optional(),
-  membershipExpiry: z.string().optional(),
   notes: z.string().max(1000).optional(),
   emergencyContact: z.string().max(20).optional(),
   isActive: z.boolean().optional(), // restore a soft-deleted member

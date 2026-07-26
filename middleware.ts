@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { isMobileUserAgent } from "@/lib/deviceDetect";
 
 /**
- * Next.js middleware for authentication protection.
+ * Next.js middleware for device gating + authentication protection.
+ * - Blocks non-mobile User-Agents (desktop, tablets) to /unsupported-device
  * - Redirects unauthenticated users from /dashboard/* to /login
  * - Redirects authenticated users from /login to /dashboard
  * - Allows API routes and static assets through
@@ -15,14 +17,23 @@ import { getToken } from "next-auth/jwt";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Allow auth API routes, static files, and _next internals
+  // API routes are already excluded by the matcher below; this only needs to
+  // let through static files (manifest, icons, anything with an extension)
+  // that the matcher's negative lookahead doesn't cover.
   if (
-    pathname.startsWith("/api/auth") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
+    pathname.startsWith("/manifest") ||
+    pathname.startsWith("/icons") ||
     pathname.includes(".")
   ) {
     return NextResponse.next();
+  }
+
+  // Device gate — this is a mobile-only app. Runs before auth so desktop
+  // visitors never even reach /login.
+  if (pathname !== "/unsupported-device" && !isMobileUserAgent(req.headers.get("user-agent"))) {
+    return NextResponse.redirect(new URL("/unsupported-device", req.url));
   }
 
   // Check for JWT token (works with next-auth v4 JWT strategy)
@@ -47,5 +58,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

@@ -1,53 +1,49 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useState, use } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, MessageCircle, Phone, CreditCard, Pencil,
-  User, Mail, MapPin, Calendar, AlertCircle, FileText, History, RefreshCw, RotateCcw,
+  MessageCircle, Phone, CreditCard, Pencil,
+  User, Mail, MapPin, Calendar, AlertCircle, FileText, History, RefreshCw, RotateCcw, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { differenceInDays } from "date-fns";
 import {
   formatDate, getMemberStatus, buildWhatsAppLink, buildSmsLink, formatCurrency,
 } from "@/lib/utils";
 import { useGymSettings } from "@/lib/useGymSettings";
 import { PaymentFormDialog } from "@/components/dashboard/PaymentFormDialog";
-import { MemberFormDialog } from "@/components/dashboard/MemberFormDialog";
-
-interface Member {
-  _id: string; name: string; phone: string; email?: string;
-  address?: string; gender?: string; dateOfBirth?: string;
-  planId?: string; planName?: string; membershipStart?: string;
-  membershipExpiry?: string; notes?: string; emergencyContact?: string;
-  dueAmount?: number; isActive?: boolean;
-}
-interface Payment {
-  _id: string; amount: number; method: string; paidAt: string;
-  invoiceNumber: string; planName?: string;
-}
-interface Membership {
-  _id: string;
-  planName: string;
-  startDate: string;
-  expiryDate: string;
-  planPrice?: number;
-  amount?: number;
-  paymentId?: string;
-  createdAt?: string;
-}
+import { MemberForm } from "@/components/dashboard/MemberForm";
+import { StackHeader } from "@/components/layout/StackHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  calendarDaysBetween,
+  membershipStatus,
+  todayInTimeZone,
+} from "@/lib/membershipCalendar";
+import { useMember } from "@/lib/hooks/useMembers";
+import { usePayments } from "@/lib/hooks/usePayments";
+import { useMemberships } from "@/lib/hooks/useMemberships";
 
 const statusVariant = {
   active: "success" as const,
   expiring: "warning" as const,
   expired: "destructive" as const,
+  reversed: "secondary" as const,
 };
 
 function getInitials(name: string) {
@@ -83,22 +79,20 @@ function InfoRow({
 
 export default function MemberDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
-  const { currency } = useGymSettings();
-  const [member, setMember] = useState<Member | null>(null);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const { currency, timezone, selectedGymId } = useGymSettings();
+  const queryClient = useQueryClient();
+  const memberQuery = useMember(id);
+  const paymentsQuery = usePayments({ memberId: id, limit: 100 });
+  const membershipsQuery = useMemberships(id);
+  const member = memberQuery.data;
+  const payments = paymentsQuery.data?.payments ?? [];
+  const memberships = membershipsQuery.data?.memberships ?? [];
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
-  const fetchMember = () =>
-    fetch(`/api/members/${id}`).then(r => r.json()).then(setMember);
-
-  const fetchPayments = () =>
-    fetch(`/api/payments?memberId=${id}`).then(r => r.json()).then(d => setPayments(d.payments || []));
-
-  const fetchMemberships = () =>
-    fetch(`/api/memberships?memberId=${id}`).then(r => r.json()).then(d => setMemberships(d.memberships || []));
+  const invalidateMemberLifecycle = () => queryClient.invalidateQueries({
+    queryKey: ["gym", selectedGymId],
+  });
 
   async function restoreMember() {
     const res = await fetch(`/api/members/${id}`, {
@@ -106,79 +100,125 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: true }),
     });
-    if (res.ok) { toast.success("Member restored"); fetchMember(); }
+    if (res.ok) {
+      toast.success("Member restored");
+      await invalidateMemberLifecycle();
+    }
     else toast.error("Failed to restore member");
   }
 
-  useEffect(() => {
-    Promise.all([fetchMember(), fetchPayments(), fetchMemberships()]);
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  async function reversePlanPurchase(membershipId: string) {
+    const response = await fetch(`/api/memberships/${membershipId}/reverse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestId: crypto.randomUUID() }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      toast.error(data.error || "Could not reverse Plan purchase");
+      return;
+    }
+    toast.success("Plan purchase reversed");
+    await invalidateMemberLifecycle();
+  }
 
-  // ── Loading skeleton ────────────────────────────────────────────────────────
-  if (!member) {
+  if (memberQuery.isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <div className="h-14 w-14 rounded-full bg-muted animate-pulse shrink-0" />
-          <div className="space-y-2">
-            <div className="h-7 w-40 bg-muted rounded-lg animate-pulse" />
-            <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+      <div className="app-canvas flex min-h-svh flex-col">
+        <StackHeader title="Member" />
+        <div className="flex-1 space-y-4 px-4 py-4">
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-muted" />
+            <div className="space-y-2">
+              <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            </div>
           </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[1, 2].map(i => (
-            <Card key={i} className="border-0 shadow-card">
-              <CardContent className="p-6 space-y-4">
-                {[...Array(5)].map((_, j) => (
-                  <div key={j} className="h-4 bg-muted rounded animate-pulse" />
-                ))}
-              </CardContent>
-            </Card>
+            <div key={i} className="h-40 animate-pulse rounded-2xl border bg-card" />
           ))}
         </div>
       </div>
     );
   }
 
-  const st = member.membershipExpiry ? getMemberStatus(member.membershipExpiry) : null;
+  if (!member) {
+    return (
+      <div className="app-canvas flex min-h-svh flex-col">
+        <StackHeader title="Member" />
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+          <p className="mt-3 font-display text-lg font-bold">Member could not load</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {memberQuery.error instanceof Error ? memberQuery.error.message : "Please try again."}
+          </p>
+          <Button className="mt-5" variant="outline" onClick={() => void memberQuery.refetch()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const st = member.membershipExpiry ? getMemberStatus(member.membershipExpiry, timezone) : null;
   const reminderMsg = `Hi ${member.name}, your gym membership expires on ${
     member.membershipExpiry ? formatDate(member.membershipExpiry) : "soon"
   }. Please renew to continue! 💪`;
 
   return (
-    <div className="space-y-6">
+    <div className="app-canvas flex min-h-svh flex-col">
+      <StackHeader
+        title={member.name}
+        actions={
+          member.isActive !== false ? (
+            <Button
+              aria-label="Edit member"
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9"
+              onClick={() => setEditOpen(true)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          ) : undefined
+        }
+      />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <Avatar className="h-12 w-12 shrink-0">
-            <AvatarFallback className="bg-primary/10 text-primary font-bold text-base">
+      <div className="app-screen flex-1 space-y-5 px-5 py-5">
+        {/* ── Profile summary ─────────────────────────────────────── */}
+        <section className="relative overflow-hidden rounded-[2rem] bg-foreground p-5 text-background shadow-xl shadow-foreground/15">
+          <div className="absolute -right-12 -top-14 h-40 w-40 rounded-full bg-primary/55 blur-2xl" />
+          <div className="relative flex items-center gap-4">
+          <Avatar className="h-16 w-16 shrink-0 ring-4 ring-background/10">
+            <AvatarFallback className="bg-background/10 text-lg font-extrabold text-primary">
               {getInitials(member.name)}
             </AvatarFallback>
           </Avatar>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">{member.name}</h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate font-display text-xl font-extrabold">{member.name}</p>
               {member.isActive === false ? (
                 <Badge variant="destructive">Deleted</Badge>
               ) : st && (
                 <Badge variant={statusVariant[st]} className="capitalize">{st}</Badge>
               )}
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {member.planName || "No plan assigned"}
-              {member.phone && <span className="text-muted-foreground/50 mx-1.5">·</span>}
-              {member.phone && <span>{member.phone}</span>}
+            <p className="mt-1 truncate text-xs font-semibold text-background/55">
+              {member.planName || "No plan assigned"} {member.phone && `· ${member.phone}`}
+            </p>
+            <p className={`mt-3 text-xs font-bold ${(member.dueAmount ?? 0) > 0 ? "text-warning" : "text-success"}`}>
+              {(member.dueAmount ?? 0) > 0
+                ? `${formatCurrency(member.dueAmount!, currency)} outstanding`
+                : "Account paid in full"}
             </p>
           </div>
-        </div>
+          </div>
+        </section>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* ── Actions row ─────────────────────────────────────────── */}
+        <div className="app-surface grid grid-cols-4 gap-1 rounded-[1.75rem] p-2">
           {member.isActive === false ? (
-            <Button variant="default" size="sm" className="gap-2" onClick={restoreMember}>
+            <Button size="sm" className="col-span-4 h-12 gap-2" onClick={restoreMember}>
               <RotateCcw className="h-4 w-4" /> Restore Member
             </Button>
           ) : (
@@ -186,67 +226,58 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
               {member.phone && (
                 <>
                   <a href={buildWhatsAppLink(member.phone, reminderMsg)} target="_blank" rel="noreferrer">
-                    <Button variant="outline" size="sm" className="gap-2 text-success">
-                      <MessageCircle className="h-4 w-4" /> WhatsApp
+                    <Button variant="ghost" className="h-[4.5rem] w-full flex-col gap-1 rounded-2xl px-1 text-[10px] font-bold text-success">
+                      <MessageCircle className="h-5 w-5" /> WhatsApp
                     </Button>
                   </a>
                   <a href={buildSmsLink(member.phone, reminderMsg)}>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Phone className="h-4 w-4" /> SMS
+                    <Button variant="ghost" className="h-[4.5rem] w-full flex-col gap-1 rounded-2xl px-1 text-[10px] font-bold">
+                      <Phone className="h-5 w-5" /> SMS
                     </Button>
                   </a>
                 </>
               )}
               {st && (st === "expired" || st === "expiring") && (
-                <Button variant="default" size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
-                  <RefreshCw className="h-4 w-4" /> Renew
+                <Button variant="ghost" className="h-[4.5rem] w-full flex-col gap-1 rounded-2xl px-1 text-[10px] font-bold text-primary" onClick={() => setPaymentOpen(true)}>
+                  <RefreshCw className="h-5 w-5" /> Renew
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => setPaymentOpen(true)}>
-                <CreditCard className="h-4 w-4" /> Record Payment
-              </Button>
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setEditOpen(true)}>
-                <Pencil className="h-4 w-4" /> Edit
+              <Button variant="ghost" className="h-[4.5rem] w-full flex-col gap-1 rounded-2xl px-1 text-[10px] font-bold" onClick={() => setPaymentOpen(true)}>
+                <CreditCard className="h-5 w-5" /> Payment
               </Button>
             </>
           )}
         </div>
-      </div>
 
-      <Separator />
+        {/* ── Tabs ───────────────────────────────────────────────── */}
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="memberships">
+              History
+              {memberships.length > 0 && (
+                <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {memberships.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="payments">
+              Payments
+              {payments.length > 0 && (
+                <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {payments.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="memberships">
-            Memberships
-            {memberships.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
-                {memberships.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="payments">
-            Payments
-            {payments.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
-                {payments.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ── Overview Tab ───────────────────────────────────────────────── */}
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-            {/* Personal Info */}
-            <Card className="border-0 shadow-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Personal Info</CardTitle>
+          {/* ── Overview Tab ───────────────────────────────────── */}
+          <TabsContent value="overview" className="space-y-4">
+            <Card className="overflow-hidden rounded-[1.75rem] border-0 shadow-card">
+              <CardHeader className="px-4 pb-2 pt-4">
+                <CardTitle className="font-display text-base font-bold">Personal Info</CardTitle>
               </CardHeader>
-              <CardContent className="divide-y divide-border px-6 pb-4">
+              <CardContent className="divide-y divide-border px-4 pb-4">
                 <InfoRow icon={Phone} label="Phone" value={member.phone} mono />
                 <InfoRow icon={Mail} label="Email" value={member.email} />
                 <InfoRow icon={User} label="Gender" value={member.gender ? member.gender.charAt(0).toUpperCase() + member.gender.slice(1) : null} />
@@ -257,12 +288,11 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
               </CardContent>
             </Card>
 
-            {/* Membership */}
-            <Card className="border-0 shadow-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Membership</CardTitle>
+            <Card className="overflow-hidden rounded-[1.75rem] border-0 shadow-card">
+              <CardHeader className="px-4 pb-2 pt-4">
+                <CardTitle className="font-display text-base font-bold">Membership</CardTitle>
               </CardHeader>
-              <CardContent className="divide-y divide-border px-6 pb-4">
+              <CardContent className="divide-y divide-border px-4 pb-4">
                 <InfoRow icon={FileText} label="Plan" value={member.planName} />
                 <InfoRow icon={Calendar} label="Start Date" value={member.membershipStart ? formatDate(member.membershipStart) : null} />
                 <InfoRow icon={Calendar} label="Expiry Date" value={member.membershipExpiry ? formatDate(member.membershipExpiry) : null} />
@@ -271,8 +301,8 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
                     <div className="mt-0.5 shrink-0 text-muted-foreground">
                       <AlertCircle className="h-4 w-4" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-0.5 text-xs text-muted-foreground">Status</p>
                       <Badge variant={statusVariant[st]} className="capitalize">{st}</Badge>
                     </div>
                   </div>
@@ -281,8 +311,8 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
                   <div className="mt-0.5 shrink-0 text-muted-foreground">
                     <AlertCircle className="h-4 w-4" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground mb-0.5">Outstanding Balance</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="mb-0.5 text-xs text-muted-foreground">Outstanding Balance</p>
                     {(member.dueAmount ?? 0) > 0 ? (
                       <Badge variant="warning" className="font-semibold">
                         {formatCurrency(member.dueAmount!, currency)} due
@@ -294,162 +324,141 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </TabsContent>
+          </TabsContent>
 
-        {/* ── Memberships Tab ────────────────────────────────────────────── */}
-        <TabsContent value="memberships">
-          <Card className="border-0 shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Membership History</CardTitle>
-                <CardDescription>
-                  {memberships.length} membership period{memberships.length !== 1 ? "s" : ""} recorded
-                </CardDescription>
-              </div>
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setPaymentOpen(true)}>
-                <CreditCard className="h-4 w-4" /> Record Payment
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {memberships.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-3">
-                    <History className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium">No membership history yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Membership periods are recorded when a payment with a plan is created
-                  </p>
+          {/* ── Memberships Tab ────────────────────────────────── */}
+          <TabsContent value="memberships">
+            {memberships.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <History className="h-6 w-6 text-muted-foreground" />
                 </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Plan</TableHead>
-                      <TableHead>Purchased</TableHead>
-                      <TableHead>Period</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Plan Price</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {memberships.map(ms => {
-                      const now = new Date();
-                      const expiry = new Date(ms.expiryDate);
-                      const start = new Date(ms.startDate);
-                      const durationDays = differenceInDays(expiry, start);
-                      const status = expiry > now
-                        ? (differenceInDays(expiry, now) <= 7 ? "expiring" : "active")
-                        : "expired";
-                      return (
-                        <TableRow key={ms._id}>
-                          <TableCell className="font-medium">{ms.planName}</TableCell>
-                          <TableCell className="text-muted-foreground whitespace-nowrap">
-                            {ms.createdAt ? formatDate(ms.createdAt) : "—"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground whitespace-nowrap">
-                            {formatDate(ms.startDate)} – {formatDate(ms.expiryDate)}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {durationDays} day{durationDays !== 1 ? "s" : ""}
-                          </TableCell>
-                          <TableCell>
-                            {(ms.planPrice ?? ms.amount) != null
-                              ? <span className="font-semibold">{formatCurrency((ms.planPrice ?? ms.amount)!, currency)}</span>
-                              : <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={statusVariant[status]} className="capitalize">
-                              {status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Payments Tab ───────────────────────────────────────────────── */}
-        <TabsContent value="payments">
-          <Card className="border-0 shadow-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Payment History</CardTitle>
-                <CardDescription>
-                  {payments.length} payment{payments.length !== 1 ? "s" : ""} recorded
-                </CardDescription>
+                <p className="text-sm font-medium">No membership history yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Membership periods are recorded when a payment with a plan is created
+                </p>
               </div>
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setPaymentOpen(true)}>
-                <CreditCard className="h-4 w-4" /> Record Payment
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {payments.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-3">
-                    <CreditCard className="h-6 w-6 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium">No payments yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Record the first payment to see it here
-                  </p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Invoice</TableHead>
-                      <TableHead>Plan</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.map(p => (
-                      <TableRow key={p._id}>
-                        <TableCell className="font-medium">{p.invoiceNumber}</TableCell>
-                        <TableCell className="text-muted-foreground">{p.planName || "—"}</TableCell>
-                        <TableCell className="capitalize">{p.method.replace("_", " ")}</TableCell>
-                        <TableCell>{formatDate(p.paidAt)}</TableCell>
-                        <TableCell className="text-right font-semibold text-success">
-                          {formatCurrency(p.amount, currency)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            ) : (
+              <div className="space-y-2">
+                {memberships.map(ms => {
+                  const durationDays = calendarDaysBetween(ms.startDate, ms.expiryDate) + 1;
+                  const status = ms.status === "reversed"
+                    ? "reversed"
+                    : membershipStatus(ms.expiryDate, todayInTimeZone(timezone));
+                  return (
+                    <div key={ms._id} className={`app-surface space-y-2 rounded-[1.5rem] p-4 ${status === "reversed" ? "bg-muted/40" : ""}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-semibold">{ms.planName}</p>
+                        <Badge variant={statusVariant[status]} className="shrink-0 capitalize">{status}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{formatDate(ms.startDate)} – {formatDate(ms.expiryDate)}</span>
+                        <span>{durationDays} day{durationDays !== 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Purchased {ms.createdAt ? formatDate(ms.createdAt) : "—"}
+                        </span>
+                        {(ms.planPrice ?? ms.amount) != null ? (
+                          <span className="font-semibold">{formatCurrency((ms.planPrice ?? ms.amount)!, currency)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
+                      {status !== "reversed" && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="mt-2 w-full gap-2 text-destructive">
+                              <Undo2 className="h-4 w-4" /> Reverse Plan purchase
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Reverse {ms.planName}?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This Membership period will be reversed and its associated Payment will be voided. Newer Membership transactions must be reversed first.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={() => void reversePlanPurchase(ms._id)}
+                              >
+                                Reverse purchase
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
 
-      {/* ── Dialogs ────────────────────────────────────────────────────────── */}
+          {/* ── Payments Tab ───────────────────────────────────── */}
+          <TabsContent value="payments">
+            {payments.length === 0 ? (
+              <div className="py-12 text-center">
+                <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <CreditCard className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium">No payments yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Record the first payment to see it here
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {payments.map(p => (
+                  <div key={p._id} className={`app-surface flex items-center justify-between gap-3 rounded-[1.5rem] p-4 ${p.status !== "paid" ? "bg-muted/40" : ""}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold">{p.invoiceNumber}</p>
+                        {p.status !== "paid" && (
+                          <Badge variant={p.status === "refunded" ? "warning" : "secondary"} className="capitalize">
+                            {p.status}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="truncate text-xs capitalize text-muted-foreground">
+                        {p.planName ? `${p.planName} · ` : ""}{p.method.replace("_", " ")} · {formatDate(p.paidAt)}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 text-sm font-semibold ${p.status === "paid" ? "text-success" : "text-muted-foreground line-through"}`}>
+                      {formatCurrency(p.amount, currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* ── Dialogs ────────────────────────────────────────────── */}
       <PaymentFormDialog
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         prefillMemberId={id}
         prefillMemberName={member.name}
         onSuccess={() => {
-          fetchPayments();
-          fetchMemberships();
-          fetchMember();
+          void invalidateMemberLifecycle();
         }}
       />
 
-      <MemberFormDialog
+      <MemberForm
+        mode="edit"
+        variant="sheet"
         open={editOpen}
         onOpenChange={setEditOpen}
-        showMembership={false}
         initialData={member}
-        onSuccess={() => fetchMember()}
+        onSuccess={() => {
+          setEditOpen(false);
+          void invalidateMemberLifecycle();
+        }}
       />
     </div>
   );

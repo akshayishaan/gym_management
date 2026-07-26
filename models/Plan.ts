@@ -26,6 +26,7 @@ const PlanSchema = new Schema<IPlan>(
 );
 
 PlanSchema.index({ gymId: 1, price: 1 });
+PlanSchema.index({ gymId: 1, isActive: 1, price: 1 });
 
 const Plan: Model<IPlan> =
   mongoose.models.Plan || mongoose.model<IPlan>("Plan", PlanSchema);

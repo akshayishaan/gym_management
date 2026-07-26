@@ -3,20 +3,31 @@ import { apiHandler } from "@/lib/apiHandler";
 import { SessionUser } from "@/lib/session";
 import Member from "@/models/Member";
 import Payment from "@/models/Payment";
+import Gym from "@/models/Gym";
+import { getGymFilter } from "@/lib/withAuth";
+import {
+  addCalendarDays,
+  localDateTimeToInstant,
+  todayInTimeZone,
+} from "@/lib/membershipCalendar";
 
 export const GET = apiHandler(async (_req: NextRequest, user: SessionUser) => {
-  const gymId = user.selectedGymId!;
-  const today = new Date();
-  const weekLater = new Date();
-  weekLater.setDate(weekLater.getDate() + 7);
-  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const gymFilter = getGymFilter(user);
+  const gymId = gymFilter.gymId;
+  const gym = await Gym.findById(gymId).select("timezone").lean();
+  const timeZone = gym?.timezone || "Asia/Kolkata";
+  const now = new Date();
+  const today = todayInTimeZone(timeZone, now);
+  const weekLater = addCalendarDays(today, 7);
+  const startOfMonth = localDateTimeToInstant(`${today.slice(0, 7)}-01`, timeZone);
 
   const [
     totalMembers,
     activeMembers,
     expiredMembers,
     expiringMembers,
-    monthRevenue,
+    monthCollections,
+    monthRefunds,
     recentPayments,
     expiringList,
   ] = await Promise.all([
@@ -25,7 +36,11 @@ export const GET = apiHandler(async (_req: NextRequest, user: SessionUser) => {
     Member.countDocuments({ gymId, isActive: { $ne: false }, membershipExpiry: { $lt: today } }),
     Member.countDocuments({ gymId, isActive: { $ne: false }, membershipExpiry: { $gte: today, $lte: weekLater } }),
     Payment.aggregate([
-      { $match: { gymId: { $eq: gymId }, paidAt: { $gte: startOfMonth }, status: "paid" } },
+      { $match: { gymId: { $eq: gymId }, paidAt: { $gte: startOfMonth }, status: { $in: ["paid", "refunded"] } } },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]),
+    Payment.aggregate([
+      { $match: { gymId: { $eq: gymId }, refundedAt: { $gte: startOfMonth }, status: "refunded" } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
     Payment.find({ gymId, status: "paid" }).sort({ paidAt: -1 }).limit(5).lean(),
@@ -41,7 +56,7 @@ export const GET = apiHandler(async (_req: NextRequest, user: SessionUser) => {
     activeMembers,
     expiredMembers,
     expiringMembers,
-    monthRevenue: monthRevenue[0]?.total || 0,
+    monthRevenue: (monthCollections[0]?.total || 0) - (monthRefunds[0]?.total || 0),
     recentPayments,
     expiringList,
   });

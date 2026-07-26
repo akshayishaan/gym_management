@@ -4,30 +4,32 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 222 30% 12%;
+    --background: 34 33% 96%;
+    --foreground: 222 42% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222 30% 12%;
+    --card-foreground: 222 42% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 30% 12%;
-    --primary: 24 95% 50%;
+    --popover-foreground: 222 42% 11%;
+    --primary: 15 91% 57%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 24 30% 95%;
-    --secondary-foreground: 24 80% 25%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 45%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 222 30% 12%;
-    --destructive: 0 84% 60%;
+    --secondary: 28 45% 91%;
+    --secondary-foreground: 20 72% 27%;
+    --muted: 30 22% 91%;
+    --muted-foreground: 220 10% 42%;
+    --accent: 185 28% 90%;
+    --accent-foreground: 190 44% 20%;
+    --destructive: 1 75% 55%;
     --destructive-foreground: 0 0% 100%;
-    --success: 150 70% 45%;
+    --success: 153 58% 39%;
     --success-foreground: 0 0% 100%;
-    --warning: 45 95% 50%;
-    --warning-foreground: 222 30% 12%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 24 95% 50%;
-    --radius: 0.75rem;
+    --warning: 38 93% 52%;
+    --warning-foreground: 30 80% 18%;
+    --border: 27 22% 87%;
+    --input: 27 22% 87%;
+    --ring: 15 91% 57%;
+    --dock: 222 42% 12%;
+    --dock-foreground: 35 35% 94%;
+    --radius: 1.125rem;
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 30% 12%;
     --sidebar-primary: 24 95% 50%;
@@ -39,29 +41,31 @@
   }
 
   .dark {
-    --background: 222 30% 8%;
+    --background: 222 32% 8%;
     --foreground: 210 30% 95%;
-    --card: 222 25% 12%;
+    --card: 222 27% 12%;
     --card-foreground: 210 30% 95%;
     --popover: 222 25% 12%;
     --popover-foreground: 210 30% 95%;
-    --primary: 24 95% 55%;
+    --primary: 15 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 222 25% 18%;
+    --secondary: 222 23% 18%;
     --secondary-foreground: 210 30% 95%;
-    --muted: 222 20% 18%;
+    --muted: 222 20% 17%;
     --muted-foreground: 215 20% 65%;
-    --accent: 222 25% 18%;
+    --accent: 190 22% 18%;
     --accent-foreground: 210 30% 95%;
-    --destructive: 0 62% 30%;
+    --destructive: 1 67% 48%;
     --destructive-foreground: 210 30% 95%;
     --success: 150 70% 45%;
     --success-foreground: 0 0% 100%;
-    --warning: 45 95% 50%;
+    --warning: 38 93% 55%;
     --warning-foreground: 222 30% 12%;
-    --border: 222 20% 18%;
-    --input: 222 20% 18%;
-    --ring: 24 95% 55%;
+    --border: 222 18% 20%;
+    --input: 222 18% 20%;
+    --ring: 15 91% 60%;
+    --dock: 222 29% 14%;
+    --dock-foreground: 35 35% 94%;
     --sidebar-background: 222 25% 10%;
     --sidebar-foreground: 210 30% 95%;
     --sidebar-primary: 24 95% 55%;
@@ -79,12 +83,78 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    min-width: 320px;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: "Avenir Next", Avenir, "Trebuchet MS", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: ui-rounded, "SF Pro Rounded", "Avenir Next Rounded", "Avenir Next", sans-serif;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
   }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .app-canvas {
+    background:
+      radial-gradient(circle at 92% 2%, hsl(var(--primary) / 0.11), transparent 25rem),
+      radial-gradient(circle at -10% 45%, hsl(var(--accent) / 0.55), transparent 22rem),
+      hsl(var(--background));
+  }
+
+  .app-screen > * {
+    animation: app-rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .app-screen > *:nth-child(2) { animation-delay: 45ms; }
+  .app-screen > *:nth-child(3) { animation-delay: 90ms; }
+  .app-screen > *:nth-child(4) { animation-delay: 135ms; }
+  .app-screen > *:nth-child(5) { animation-delay: 180ms; }
+
+  .app-surface {
+    @apply bg-card;
+    border: 1px solid hsl(var(--border) / 0.58);
+    box-shadow: 0 14px 34px -26px hsl(var(--foreground) / 0.42),
+      0 2px 8px -5px hsl(var(--foreground) / 0.18);
+  }
+
+  .app-section-label {
+    @apply text-[11px] font-bold uppercase text-muted-foreground;
+    letter-spacing: 0.13em;
+  }
+
+  .hide-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  @keyframes app-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-screen > * {
+      animation: none;
+    }
   }
 }

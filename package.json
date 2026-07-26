@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "migrate:lifecycle": "tsx scripts/migrate-lifecycle-v2.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",

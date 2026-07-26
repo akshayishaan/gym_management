@@ -7,30 +7,30 @@ interface BreakdownItem {
 }
 
 interface PaymentBreakdownProps {
-  /** The charges / dues being settled, rendered as centered columns. */
+  /** The charges / dues being settled. */
   items: BreakdownItem[];
   amountPaid: number;
   currency: string;
-  /** Label for the trailing balance cell. Default "Due after". */
+  /** Label for the trailing balance row. Default "Due after". */
   balanceLabel?: string;
   /** Badge text shown when the balance is fully cleared. Default "Paid in full". */
   settledLabel?: string;
   className?: string;
 }
 
-function Cell({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex-1 space-y-0.5 text-center">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="font-medium">{value}</p>
+    <div className="flex items-center justify-between py-1.5 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
     </div>
   );
 }
 
 /**
- * Shared breakdown card used by the add-member and record-payment dialogs.
- * Renders a row of "owed" items, the amount paid, and the resulting balance
- * (warning badge when money is still owed, success badge when settled).
+ * Shared breakdown card used by the member form and payment sheet. Stacked
+ * vertically (label left, value right) — the old 3-across flex row didn't
+ * fit a 375px screen with more than two items.
  */
 export function PaymentBreakdown({
   items,
@@ -44,28 +44,21 @@ export function PaymentBreakdown({
   const balance = Math.max(0, total - amountPaid);
 
   return (
-    <div
-      className={cn(
-        "rounded-lg bg-muted/50 border px-4 py-3 flex items-center gap-3 text-sm",
-        className
-      )}
-    >
+    <div className={cn("rounded-2xl border border-border/60 bg-muted/50 px-4 py-3", className)}>
       {items.map((item) => (
-        <Cell
-          key={item.label}
-          label={item.label}
-          value={formatCurrency(item.value, currency)}
-        />
+        <Row key={item.label} label={item.label} value={formatCurrency(item.value, currency)} />
       ))}
-      <Cell label="Amount paid" value={formatCurrency(amountPaid, currency)} />
-      <div className="flex-1 space-y-0.5 text-center">
-        <p className="text-muted-foreground text-xs">{balanceLabel}</p>
+      <Row label="Amount paid" value={formatCurrency(amountPaid, currency)} />
+      <div className="mt-1 flex items-center justify-between border-t pt-2 text-sm">
+        <span className="text-muted-foreground">{balanceLabel}</span>
         {balance > 0 ? (
           <Badge variant="warning" className="font-semibold">
             {formatCurrency(balance, currency)}
           </Badge>
         ) : (
-          <Badge variant="success" className="font-semibold">{settledLabel}</Badge>
+          <Badge variant="success" className="font-semibold">
+            {settledLabel}
+          </Badge>
         )}
       </div>
     </div>

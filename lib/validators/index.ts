@@ -8,7 +8,7 @@
 export type { MemberCreateInput, MemberUpdateInput } from "./member";
 
 // Payment types
-export type { PaymentCreateInput } from "./payment";
+export type { PaymentActionInput, PaymentCreateInput } from "./payment";
 
 // Plan types
 export type { PlanCreateInput, PlanUpdateInput } from "./plan";
@@ -71,12 +71,17 @@ export interface PaymentResponse {
   planId?: string;
   planName?: string;
   amount: number;
+  kind: "plan_purchase" | "dues";
   method: "cash" | "card" | "upi" | "bank_transfer" | "other";
-  status: "paid" | "pending" | "refunded";
+  status: "paid" | "voided" | "refunded";
   invoiceNumber: string;
   notes?: string;
   paidAt: string;
   createdBy?: string;
+  voidedAt?: string;
+  voidReason?: string;
+  refundedAt?: string;
+  refundReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +129,7 @@ export interface GymResponse {
   phone?: string;
   email?: string;
   currency: string;
+  timezone: string;
   expiryReminderDays: number;
   isActive: boolean;
   createdAt: string;
