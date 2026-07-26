@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { usePayments } from "@/lib/hooks/usePayments";
 import { useQueryClient } from "@tanstack/react-query";
 import { todayInTimeZone } from "@/lib/membershipCalendar";
+import { createRequestId } from "@/lib/clientRequestId";
 
 const MONTHS = [
   "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
@@ -45,7 +46,7 @@ export default function PaymentsPage() {
   }, [currentMonth, selectedGymId]);
 
   async function runLifecycleAction(endpoint: string, successMessage: string) {
-    const requestId = actionRequestIds.current.get(endpoint) ?? crypto.randomUUID();
+    const requestId = actionRequestIds.current.get(endpoint) ?? createRequestId();
     actionRequestIds.current.set(endpoint, requestId);
     const response = await fetch(endpoint, {
       method: "POST",

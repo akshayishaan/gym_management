@@ -15,17 +15,6 @@ import { useSearchParams } from "next/navigation";
 import { useMembers } from "@/lib/hooks/useMembers";
 import { useInvalidateGymScope } from "@/lib/hooks/useGymScope";
 
-interface Member {
-  _id: string;
-  name: string;
-  phone: string;
-  email?: string;
-  planName?: string;
-  membershipExpiry?: string;
-  membershipStart?: string;
-  dueAmount?: number;
-}
-
 const STATUS_OPTIONS = [
   { value: "all", label: "All Members" },
   { value: "active", label: "Active" },

@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { apiHandlerWithParams } from "@/lib/apiHandler";
 import { getGymFilter } from "@/lib/withAuth";
-import { SessionUser } from "@/lib/session";
 import Plan from "@/models/Plan";
 import ActivityLog from "@/models/ActivityLog";
 import { planUpdateSchema } from "@/lib/validators/plan";

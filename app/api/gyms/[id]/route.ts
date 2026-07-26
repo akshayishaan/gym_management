@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { apiHandlerWithParams } from "@/lib/apiHandler";
 import { ForbiddenError } from "@/lib/withAuth";
-import { SessionUser } from "@/lib/session";
 import Gym from "@/models/Gym";
 import Staff from "@/models/Staff";
 import Member from "@/models/Member";

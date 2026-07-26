@@ -25,6 +25,7 @@ import {
   calculateMembershipExpiry,
   todayInTimeZone,
 } from "@/lib/membershipCalendar";
+import { createRequestId } from "@/lib/clientRequestId";
 
 interface Member {
   _id: string;
@@ -97,7 +98,7 @@ export function PaymentFormDialog({
   // Reset form on open
   useEffect(() => {
     if (!open) return;
-    requestIdRef.current = crypto.randomUUID();
+    requestIdRef.current = createRequestId();
     const nextForm = {
       ...DEFAULT_FORM,
       memberId: prefillMemberId || "",
@@ -157,7 +158,7 @@ export function PaymentFormDialog({
   }
 
   function clearMember() {
-    setForm(f => ({ ...DEFAULT_FORM, planId: "", planName: "" }));
+    setForm({ ...DEFAULT_FORM, planId: "", planName: "" });
     setSelectedDue(0);
     setSelectedExpiry(null);
   }
@@ -205,7 +206,7 @@ export function PaymentFormDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          requestId: requestIdRef.current ??= crypto.randomUUID(),
+          requestId: requestIdRef.current ??= createRequestId(),
           memberId: form.memberId,
           planId: form.planId || undefined,
           amount: amountNum,

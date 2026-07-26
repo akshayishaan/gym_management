@@ -38,6 +38,7 @@ import {
 import { useMember } from "@/lib/hooks/useMembers";
 import { usePayments } from "@/lib/hooks/usePayments";
 import { useMemberships } from "@/lib/hooks/useMemberships";
+import { createRequestId } from "@/lib/clientRequestId";
 
 const statusVariant = {
   active: "success" as const,
@@ -111,7 +112,7 @@ export default function MemberDetailPage({ params }: { params: Promise<{ id: str
     const response = await fetch(`/api/memberships/${membershipId}/reverse`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requestId: crypto.randomUUID() }),
+      body: JSON.stringify({ requestId: createRequestId() }),
     });
     const data = await response.json();
     if (!response.ok) {

@@ -22,6 +22,7 @@ import {
   calculateMembershipExpiry,
   todayInTimeZone,
 } from "@/lib/membershipCalendar";
+import { createRequestId } from "@/lib/clientRequestId";
 
 const DEFAULT_FORM = {
   name: "",
@@ -94,7 +95,7 @@ export function MemberForm({
 
   useEffect(() => {
     if (variant !== "sheet" || !open || isEdit) return;
-    requestIdRef.current = crypto.randomUUID();
+    requestIdRef.current = createRequestId();
     const nextForm = { ...DEFAULT_FORM, membershipStart: todayInTimeZone(timezone) };
     initialFormRef.current = nextForm;
     setForm(nextForm);
@@ -185,7 +186,7 @@ export function MemberForm({
         toast.success("Member updated!");
       } else {
         const payload: Record<string, unknown> = {
-          requestId: requestIdRef.current ??= crypto.randomUUID(),
+          requestId: requestIdRef.current ??= createRequestId(),
           name: form.name,
           phone: form.phone,
           email: form.email || undefined,

@@ -49,7 +49,7 @@ The wrapper handles auth (`requireAuth` → 401), injects `selectedGymId`, and c
 
 `lib/withAuth.ts` exports only `requireAuth`, `getGymFilter`, and the two error classes. The old `requireRole` / `requireSuperAdmin` / `requireNotSuperAdmin` helpers have been removed.
 
-**Request bodies are validated with Zod** schemas in `lib/validators/*` (`.parse(body)` — the thrown `ZodError` becomes a 422 automatically). `lib/validators/index.ts` re-exports all types.
+**Request bodies are validated with Zod** schemas in `lib/validators/*` (`.parse(body)` — the thrown `ZodError` becomes a 422 automatically).
 
 **List endpoints** share a convention: read `search`, `status`, `page`, `limit` off `searchParams`, build `query` by spreading `getGymFilter(user)`, run reads with `.lean()`, and return `{ <items>, total, page, limit }`. See `app/api/members/route.ts` as the reference.
 
@@ -113,7 +113,7 @@ Payments have `paid`, `voided`, or `refunded` states and are never hard-deleted.
 - Provider tree (`components/Providers.tsx`): `QueryClientProvider → SessionProvider → ThemeProvider → GymSettingsProvider`.
 - UI is **shadcn/ui** (Radix primitives in `components/ui/`) + Tailwind. Pages live in `app/dashboard/*`; reusable pieces in `components/layout` and `components/dashboard`. `GymGuard`/`NoGymState` handle the "no gym selected" case. **Theme:** use semantic tokens (`bg-primary/10 text-primary`, `text-success`, `text-warning`, `text-destructive`, `shadow-card`) — never hardcoded Tailwind colors like `text-green-600` — so gym theming and dark mode work.
 - **Toasts** use `sonner` — call `toast.success()` / `toast.error()` directly.
-- Charts use **Recharts**; animations use **framer-motion**.
+- Charts use **Recharts**.
 
 ## Forms & dialogs pattern
 
