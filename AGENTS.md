@@ -1,22 +1,20 @@
 # AGENTS.md
 
-Next.js 15 + React 19 multi-tenant gym SaaS (MongoDB/Mongoose + NextAuth v4). Node >= 24.
+Next.js 15 + React 19 multi-tenant gym SaaS (MongoDB/Mongoose + NextAuth v4). Node 24.x.
 
 ## Commands
 
 ```
 npm run dev      # localhost:3000
-npm run build    # standalone output; type-check runs here
+npm run build    # production build; type-check runs here
 npm run lint     # next lint
-npm run seed     # tsx scripts/seed.ts
-npm run migrate:lifecycle -- --apply
 ```
 
-There is **no test runner**. Verify with `npm run build` or `tsc --noEmit`. Single-file scripts run via `npx tsx ...`.
+There is **no test runner**. Verify with `npm run build` or `tsc --noEmit`.
 
 ## Setup
 
-Use `node -v` >= 24. Copy `.env.example` to `.env` with `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`.
+Use Node 24.x. Copy `.env.example` to `.env` with `MONGODB_URI`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL`. Database credentials may be embedded in the URI or supplied as the `MONGODB_USERNAME` / `MONGODB_PASSWORD` pair.
 
 ## Critical gotchas
 
@@ -37,9 +35,9 @@ Use `node -v` >= 24. Copy `.env.example` to `.env` with `MONGODB_URI`, `NEXTAUTH
 - **DatePicker:** Use the themed `MobileDatePicker`; Membership values stay as `YYYY-MM-DD` date-only strings.
 - **Toasts:** `sonner` (`toast.success()`, `toast.error()`).
 
-## Docker
+## Deployment
 
-`docker-compose up` starts `app`, a MongoDB replica set, its initializer, and a one-shot seed service. Transactions require the replica set. Env vars: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, plus `SEED_ADMIN_*` for seeding.
+The repository targets Vercel's Next.js runtime and does not use Docker. Configure `MONGODB_URI`, optional `MONGODB_USERNAME` / `MONGODB_PASSWORD`, `NEXTAUTH_SECRET`, and the production `NEXTAUTH_URL` in Vercel. MongoDB must be an external transaction-capable deployment. Create the initial admin through the public signup flow.
 
 ## Extras
 

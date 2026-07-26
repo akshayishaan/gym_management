@@ -4,25 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Multi-tenant gym management SaaS built with **Next.js 15 (App Router) + React 19 + MongoDB/Mongoose + NextAuth v4**. One deployment serves many gyms; a staff account can belong to multiple gyms and switch between them. Requires **Node >= 24**.
+Multi-tenant gym management SaaS built with **Next.js 15 (App Router) + React 19 + MongoDB/Mongoose + NextAuth v4**. One deployment serves many gyms; a staff account can belong to multiple gyms and switch between them. Requires **Node 24.x**.
 
 ## Commands
 
 ```bash
 npm run dev      # next dev (localhost:3000)
-npm run build    # next build (output: standalone)
+npm run build    # next build (Vercel-compatible output)
 npm run lint     # next lint (eslint-config-next)
-npm run seed     # tsx scripts/seed.ts — creates the seed admin account + gym
-npm run migrate:lifecycle -- --apply # migrate legacy dates/payment states
 ```
 
 There is **no test runner configured**. Type-checking happens via `npm run build` (or `tsc --noEmit`).
 
 **Schema changes need a dev-server restart.** Models use the `mongoose.models.X || mongoose.model(...)` guard, so an already-running `next dev` process keeps the *old* compiled schema after you edit a model file. New fields silently won't persist until the process is restarted.
 
-**Docker:** `docker-compose up` brings up `app`, a single-node MongoDB replica set, its one-shot initializer, and the seed service. Transactions require the replica set. Env vars: `MONGODB_URI`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, plus `SEED_*` for the seed script (see `.env.example`).
-
-**One-off scripts** run via `tsx`, e.g. `npx tsx scripts/migrate-multi-tenant.ts` (needs `MONGODB_URI` in env).
+**Deployment:** the repository targets Vercel's Next.js runtime and has no Docker deployment path. Configure the external transaction-capable MongoDB connection and NextAuth variables in Vercel. Create the initial admin through the public signup flow.
 
 Path alias: `@/*` maps to the repo root.
 
