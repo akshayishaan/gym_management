@@ -6,12 +6,23 @@ import { AuthModule } from "./auth";
 import { GymsModule } from "./gyms";
 import { MembersModule } from "./members";
 import { PlansModule } from "./plans";
+import { PaymentsModule } from "./payments";
+import { MembershipsModule } from "./memberships";
 import { HttpExceptionFilter } from "./common";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, AuthModule, GymsModule, MembersModule, PlansModule],
+  imports: [
+    AppConfigModule,
+    DatabaseModule,
+    AuthModule,
+    GymsModule,
+    MembersModule,
+    PlansModule,
+    PaymentsModule,
+    MembershipsModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,
