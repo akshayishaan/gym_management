@@ -5,7 +5,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { Types } from "mongoose";
-import { ForbiddenError } from "../../common";
+import { AuthError, ForbiddenError } from "../../common";
 import type { AuthenticatedRequest } from "../auth.types";
 
 const SELECTED_GYM_HEADER = "x-selected-gym";
@@ -32,7 +32,7 @@ export class RequireGymGuard implements CanActivate {
       .getRequest<AuthenticatedRequest & Request>();
 
     if (!request.user) {
-      throw new ForbiddenError("No gym selected");
+      throw new AuthError("Unauthorized");
     }
 
     const { gymIds } = request.user;
@@ -51,10 +51,6 @@ export class RequireGymGuard implements CanActivate {
 
     if (!resolved) {
       throw new ForbiddenError("No gym selected");
-    }
-
-    if (!Types.ObjectId.isValid(resolved)) {
-      throw new ForbiddenError("Access denied to this gym");
     }
 
     request.gymId = new Types.ObjectId(resolved);

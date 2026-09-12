@@ -5,7 +5,7 @@ import { z } from "zod";
  * Next.js `lib/validators/` surface. ZodError → 422 via the global filter.
  */
 export const signupSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100).trim(),
+  name: z.string().trim().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });

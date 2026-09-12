@@ -20,8 +20,8 @@ interface MongoLikeError {
 const isMongoLikeError = (value: unknown): value is MongoLikeError =>
   typeof value === "object" &&
   value !== null &&
-  "name" in value &&
-  typeof (value as { name: unknown }).name === "string";
+  "code" in value &&
+  typeof (value as { code: unknown }).code === "number";
 
 /**
  * Single, centralized error mapper. Every thrown error — domain errors, auth

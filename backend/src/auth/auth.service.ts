@@ -53,7 +53,6 @@ export class AuthService {
     }
 
     staff.lastLogin = new Date();
-    await staff.save();
 
     return this.issueTokens(staff);
   }
