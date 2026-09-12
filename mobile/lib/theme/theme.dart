@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
+export 'tokens.dart';
+
 /// Builds the Material 3 [ThemeData] for the app.
 ///
 /// The palette is populated from [ThemeTokens] (light/dark are pure data in

@@ -20,7 +20,7 @@ class PaymentsScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 24),
       child: AppScreen(
         children: <Widget>[
-          AppSectionLabel('Payments'),
+          const AppSectionLabel('Payments'),
           const SizedBox(height: 12),
           AppSurface(
             padding: const EdgeInsets.all(20),

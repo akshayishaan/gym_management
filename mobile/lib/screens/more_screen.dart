@@ -20,7 +20,7 @@ class MoreScreen extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 24),
       child: AppScreen(
         children: <Widget>[
-          AppSectionLabel('More'),
+          const AppSectionLabel('More'),
           const SizedBox(height: 12),
           AppSurface(
             padding: const EdgeInsets.all(20),

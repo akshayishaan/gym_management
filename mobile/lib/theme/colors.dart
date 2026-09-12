@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Color-space helpers shared by the design system.
 ///
 /// The token *values* in `tokens.dart` are stored as hex with a comment
@@ -7,6 +5,8 @@ import 'package:flutter/material.dart';
 /// (converted once, at authoring time, with CSS's exact `hsl()` algorithm).
 /// Widgets never compute color; they consume resolved [Color]s.
 library;
+
+import 'package:flutter/material.dart';
 
 /// Parses a `#RRGGBB` hex string (e.g. a gym's `primaryColor`) into a
 /// [Color]. Throws [FormatException] on malformed input — callers (the

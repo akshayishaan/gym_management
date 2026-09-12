@@ -6,6 +6,5 @@ build/
 .flutter-plugins-dependencies
 *.iml
 .idea/
-pubspec.lock
 android/
 ios/
