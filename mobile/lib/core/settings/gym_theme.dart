@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 
 /// The resolved theming inputs for the current gym + system brightness.
 ///
-/// [primaryColor] is the gym's `#RRGGBB` hex string (empty falls back to the
-/// default brand orange). [brightness] follows the device color mode. This is
-/// resolved at runtime by `themeControllerProvider` — widgets never compose a
-/// [ThemeData] themselves.
+/// [primaryColor] is the gym's `#RRGGBB` hex string; `''` means "no override"
+/// (use the per-brightness token primary). [brightness] is `null` to follow
+/// the device color mode, or an explicit [Brightness] when the user has forced
+/// light/dark. Resolved at runtime by `themeControllerProvider` — widgets never
+/// compose a [ThemeData] themselves.
+///
+/// Light primary is `hsl(15 91% 57%)` = `#F55F2E`; dark primary is
+/// `hsl(15 91% 60%)` = `#F66B3C` (see `tokens.dart`).
 ///
 /// Introduced as a plain immutable class (no `freezed` codegen) so the
 /// scaffold analyzes and runs standalone. `freezed`/`json_serializable`
@@ -14,17 +18,26 @@ import 'package:flutter/material.dart';
 @immutable
 class GymTheme {
   const GymTheme({
-    this.primaryColor = kDefaultPrimaryColorHex,
-    this.brightness = Brightness.light,
+    this.primaryColor = '',
+    this.brightness,
   });
 
+  /// Gym `#RRGGBB` hex string, or `''` when no override is set.
   final String primaryColor;
-  final Brightness brightness;
 
-  GymTheme copyWith({String? primaryColor, Brightness? brightness}) {
+  /// Explicit light/dark override, or `null` to follow the system.
+  final Brightness? brightness;
+
+  /// Sentinel marking an absent argument in [copyWith], so `null` can be used
+  /// to explicitly clear [brightness] (back to "follow system").
+  static const Object _unset = Object();
+
+  GymTheme copyWith({String? primaryColor, Object? brightness = _unset}) {
     return GymTheme(
       primaryColor: primaryColor ?? this.primaryColor,
-      brightness: brightness ?? this.brightness,
+      brightness: identical(brightness, _unset)
+          ? this.brightness
+          : brightness as Brightness?,
     );
   }
 
@@ -38,15 +51,10 @@ class GymTheme {
   int get hashCode => Object.hash(primaryColor, brightness);
 }
 
-/// Default brand primary (orange `hsl(15 91% 57%)` ≈ `#f05b3b`).
-const String kDefaultPrimaryColorHex = '#f05b3b';
-
-/// Parses [GymTheme.primaryColor] into a [Color], falling back to the default
-/// orange when absent or malformed. Never throws.
-Color resolvePrimaryColor(String hex) => _tryParseHex(hex) ?? defaultPrimary;
-
-/// Default primary as a [Color] (#F05B3B).
-const Color defaultPrimary = Color(0xFFF05B3B);
+/// Parses [GymTheme.primaryColor] into a [Color], returning `null` when absent
+/// (no override) or malformed — callers then fall back to the per-brightness
+/// token primary. Never throws.
+Color? resolvePrimaryColor(String hex) => _tryParseHex(hex);
 
 Color? _tryParseHex(String hex) {
   var v = hex.trim();

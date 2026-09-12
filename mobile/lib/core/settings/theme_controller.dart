@@ -1,5 +1,3 @@
-import 'dart:ui' show PlatformDispatcher;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,26 +19,20 @@ class ThemeController extends Notifier<GymTheme> {
   @override
   GymTheme build() => const GymTheme();
 
-  /// Applies a per-gym `primaryColor` override (hex `#RRGGBB`).
+  /// Applies a per-gym `primaryColor` override (hex `#RRGGBB`), or clears it
+  /// when `null`/empty (falls back to the per-brightness token primary).
   void setGym({String? primaryColor}) {
-    state = state.copyWith(
-      primaryColor: primaryColor ?? kDefaultPrimaryColorHex,
-    );
+    state = state.copyWith(primaryColor: primaryColor ?? '');
   }
 
-  /// Sets explicit brightness, or re-syncs from the platform when `null`.
+  /// Sets explicit brightness, or clears the override (null = follow system).
   void setBrightness(Brightness? brightness) {
-    if (brightness != null) {
-      state = state.copyWith(brightness: brightness);
-    } else {
-      state = state.copyWith(
-        brightness: PlatformDispatcher.instance.platformBrightness,
-      );
-    }
+    state = state.copyWith(brightness: brightness);
   }
 
-  /// The parsed primary [Color] for the current gym (never null).
-  Color get primary => resolvePrimaryColor(state.primaryColor);
+  /// The parsed primary [Color] for the current gym, or `null` when no
+  /// override is set.
+  Color? get primary => resolvePrimaryColor(state.primaryColor);
 }
 
 /// The canonical theme state provider.
@@ -48,8 +40,9 @@ final themeControllerProvider = NotifierProvider<ThemeController, GymTheme>(
   ThemeController.new,
 );
 
-/// The resolved primary [Color] for the current gym, derived from [GymTheme].
-final primaryColorProvider = Provider<Color>((ref) {
+/// The resolved primary [Color] for the current gym, or `null` when no
+/// per-gym override is set (so the per-brightness token primary applies).
+final primaryColorProvider = Provider<Color?>((ref) {
   final GymTheme state = ref.watch(themeControllerProvider);
   return resolvePrimaryColor(state.primaryColor);
 });

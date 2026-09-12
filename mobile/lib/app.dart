@@ -19,13 +19,20 @@ class GymManagerApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = ref.watch(appThemeProvider);
     final ThemeData darkTheme = ref.watch(appDarkThemeProvider);
+    final GymTheme gymTheme = ref.watch(themeControllerProvider);
+
+    final ThemeMode themeMode = switch (gymTheme.brightness) {
+      Brightness.dark => ThemeMode.dark,
+      Brightness.light => ThemeMode.light,
+      null => ThemeMode.system,
+    };
 
     return MaterialApp(
       title: 'Gym Manager',
       debugShowCheckedModeBanner: false,
       theme: theme,
       darkTheme: darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       home: const _RootShell(),
     );
   }
