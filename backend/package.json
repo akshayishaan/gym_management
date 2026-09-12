@@ -1,0 +1,35 @@
+{
+  "name": "gym-management-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NestJS + Mongoose backend for the multi-tenant gym SaaS (migration from Next.js)",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "mongoose": "^8.15.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.0",
+    "prettier": "^3.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}
