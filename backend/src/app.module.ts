@@ -8,6 +8,9 @@ import { MembersModule } from "./members";
 import { PlansModule } from "./plans";
 import { PaymentsModule } from "./payments";
 import { MembershipsModule } from "./memberships";
+import { DashboardModule } from "./dashboard";
+import { ReportsModule } from "./reports";
+import { ActivityModule } from "./activity";
 import { HttpExceptionFilter } from "./common";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
@@ -22,6 +25,9 @@ import { AppService } from "./app.service";
     PlansModule,
     PaymentsModule,
     MembershipsModule,
+    DashboardModule,
+    ReportsModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [

@@ -43,6 +43,14 @@ export {
   type LifecycleResult,
 } from "./membershipLifecycle";
 
-export { getPlanPortfolioInsights } from "./gymInsights";
+export { getPlanPortfolioInsights, getAnnualGymInsights } from "./gymInsights";
+
+export type {
+  ReportsResponse,
+  ReportComparisonMetric,
+  ReportSeriesPoint,
+  ReportPlanPerformance,
+  ReportPaymentMethod,
+} from "./reportTypes";
 
 export type { PlanStats, PlanListItem, PlansResponse } from "./planTypes";
