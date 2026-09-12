@@ -1,0 +1,16 @@
+{
+  "name": "parity-harness",
+  "private": true,
+  "version": "0.1.0",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "harness": "ts-node src/run.ts",
+    "diff": "ts-node src/diff.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
