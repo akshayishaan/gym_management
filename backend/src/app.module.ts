@@ -5,12 +5,13 @@ import { DatabaseModule } from "./database";
 import { AuthModule } from "./auth";
 import { GymsModule } from "./gyms";
 import { MembersModule } from "./members";
+import { PlansModule } from "./plans";
 import { HttpExceptionFilter } from "./common";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, AuthModule, GymsModule, MembersModule],
+  imports: [AppConfigModule, DatabaseModule, AuthModule, GymsModule, MembersModule, PlansModule],
   controllers: [AppController],
   providers: [
     AppService,

@@ -42,3 +42,7 @@ export {
   reversePlanPurchase,
   type LifecycleResult,
 } from "./membershipLifecycle";
+
+export { getPlanPortfolioInsights } from "./gymInsights";
+
+export type { PlanStats, PlanListItem, PlansResponse } from "./planTypes";
