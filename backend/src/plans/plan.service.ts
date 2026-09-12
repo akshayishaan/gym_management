@@ -3,6 +3,7 @@ import type { FilterQuery, Types } from "mongoose";
 import { ActivityLog, Gym, Plan, type IPlan } from "../schemas";
 import { DomainError } from "../common";
 import { MongoConnectionService } from "../database";
+import { CacheService, CACHE_TTL_SECONDS } from "../cache";
 import type { AuthenticatedUser } from "../auth";
 import {
   exactPlanNamePattern,
@@ -29,7 +30,10 @@ interface ListParams {
  */
 @Injectable()
 export class PlansService {
-  constructor(private readonly connection: MongoConnectionService) {}
+  constructor(
+    private readonly connection: MongoConnectionService,
+    private readonly cache: CacheService,
+  ) {}
 
   async list(gymId: Types.ObjectId, params: ListParams): Promise<PlansResponse> {
     await this.connection.getConnection();
@@ -68,11 +72,16 @@ export class PlansService {
     const gym = await Gym.findById(gymId).select("timezone").lean();
     if (!gym) throw new DomainError("Gym not found", 404);
 
-    const insights = await getPlanPortfolioInsights({
-      gymId: String(gymId),
-      timeZone: gym.timezone || "Asia/Kolkata",
-      asOf: new Date(),
-    });
+    const insights = await this.cache.getOrCompute(
+      `cache:plans:${String(gymId)}`,
+      CACHE_TTL_SECONDS.plans,
+      () =>
+        getPlanPortfolioInsights({
+          gymId: String(gymId),
+          timeZone: gym.timezone || "Asia/Kolkata",
+          asOf: new Date(),
+        }),
+    );
 
     const enrichedPlans = serializedPlans.map((plan) => ({
       ...plan,
@@ -116,6 +125,8 @@ export class PlansService {
       details: `Created plan: ${plan.name}`,
     });
 
+    this.cache.scheduleInvalidation(String(gymId));
+
     return plan;
   }
 
@@ -156,6 +167,8 @@ export class PlansService {
         ? `Activated plan: ${plan.name}`
         : `Updated plan: ${plan.name}`,
     });
+
+    this.cache.scheduleInvalidation(String(gymId));
 
     return plan;
   }

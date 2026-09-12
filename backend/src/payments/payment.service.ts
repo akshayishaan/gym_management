@@ -3,6 +3,7 @@ import type { Types } from "mongoose";
 import { Gym, Membership, Payment } from "../schemas";
 import { DomainError } from "../common";
 import { MongoConnectionService } from "../database";
+import { CacheService } from "../cache";
 import type { AuthenticatedUser } from "../auth";
 import { localDateTimeToInstant, recordPayment, refundPayment, voidPayment } from "../lib";
 import { paymentActionSchema, paymentCreateSchema } from "./payment.schemas";
@@ -22,7 +23,10 @@ interface ListParams {
  */
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly connection: MongoConnectionService) {}
+  constructor(
+    private readonly connection: MongoConnectionService,
+    private readonly cache: CacheService,
+  ) {}
 
   async list(gymId: Types.ObjectId, params: ListParams): Promise<Record<string, unknown>> {
     await this.connection.getConnection();
@@ -134,6 +138,8 @@ export class PaymentsService {
       ? await Payment.findOne({ _id: result.paymentId, gymId }).lean()
       : null;
 
+    this.cache.scheduleInvalidation(String(gymId));
+
     return { payment, ...result };
   }
 
@@ -155,7 +161,7 @@ export class PaymentsService {
 
     const validated = paymentActionSchema.parse(body);
 
-    return voidPayment({
+    const result = await voidPayment({
       gymId: String(gymId),
       requestId: validated.requestId,
       actor: { id: user.id, name: user.name },
@@ -163,6 +169,10 @@ export class PaymentsService {
       paymentId: id,
       reason: validated.reason,
     });
+
+    this.cache.scheduleInvalidation(String(gymId));
+
+    return result;
   }
 
   async refund(gymId: Types.ObjectId, user: AuthenticatedUser, id: string, body: unknown) {
@@ -170,7 +180,7 @@ export class PaymentsService {
 
     const validated = paymentActionSchema.parse(body);
 
-    return refundPayment({
+    const result = await refundPayment({
       gymId: String(gymId),
       requestId: validated.requestId,
       actor: { id: user.id, name: user.name },
@@ -178,5 +188,9 @@ export class PaymentsService {
       paymentId: id,
       reason: validated.reason,
     });
+
+    this.cache.scheduleInvalidation(String(gymId));
+
+    return result;
   }
 }

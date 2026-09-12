@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
 import { APP_FILTER } from "@nestjs/core";
 import { AppConfigModule } from "./config";
+import { CacheModule } from "./cache";
 import { DatabaseModule } from "./database";
+import { OpenApiModule } from "./openapi";
 import { AuthModule } from "./auth";
 import { GymsModule } from "./gyms";
 import { MembersModule } from "./members";
@@ -18,7 +20,9 @@ import { AppService } from "./app.service";
 @Module({
   imports: [
     AppConfigModule,
+    CacheModule,
     DatabaseModule,
+    OpenApiModule,
     AuthModule,
     GymsModule,
     MembersModule,

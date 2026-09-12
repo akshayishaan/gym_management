@@ -3,6 +3,7 @@ import type { Types } from "mongoose";
 import { Gym } from "../schemas";
 import { DomainError } from "../common";
 import { MongoConnectionService } from "../database";
+import { CacheService, CACHE_TTL_SECONDS } from "../cache";
 import { getAnnualGymInsights, todayInTimeZone } from "../lib";
 
 /**
@@ -12,7 +13,10 @@ import { getAnnualGymInsights, todayInTimeZone } from "../lib";
  */
 @Injectable()
 export class ReportsService {
-  constructor(private readonly connection: MongoConnectionService) {}
+  constructor(
+    private readonly connection: MongoConnectionService,
+    private readonly cache: CacheService,
+  ) {}
 
   async getReport(gymId: Types.ObjectId, yearParam?: string) {
     await this.connection.getConnection();
@@ -27,10 +31,15 @@ export class ReportsService {
       ? parsedYear
       : currentYear;
 
-    return getAnnualGymInsights({
-      gymId: String(gymId),
-      timeZone,
-      asOf,
-    }, year);
+    return this.cache.getOrCompute(
+      `cache:reports:${String(gymId)}:${year}`,
+      CACHE_TTL_SECONDS.reports,
+      () =>
+        getAnnualGymInsights({
+          gymId: String(gymId),
+          timeZone,
+          asOf,
+        }, year),
+    );
   }
 }

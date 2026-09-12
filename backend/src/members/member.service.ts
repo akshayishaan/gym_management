@@ -3,6 +3,7 @@ import type { FilterQuery, Types } from "mongoose";
 import { ActivityLog, Gym, Member, Payment, type IMember } from "../schemas";
 import { DomainError } from "../common";
 import { MongoConnectionService } from "../database";
+import { CacheService } from "../cache";
 import type { AuthenticatedUser } from "../auth";
 import { onboardMember } from "../lib";
 import { addCalendarDays, partialPlanNamePattern, todayInTimeZone } from "../lib";
@@ -23,7 +24,10 @@ interface ListParams {
  */
 @Injectable()
 export class MembersService {
-  constructor(private readonly connection: MongoConnectionService) {}
+  constructor(
+    private readonly connection: MongoConnectionService,
+    private readonly cache: CacheService,
+  ) {}
 
   async list(gymId: Types.ObjectId, params: ListParams) {
     await this.connection.getConnection();
@@ -99,6 +103,8 @@ export class MembersService {
         : null,
     ]);
 
+    this.cache.scheduleInvalidation(String(gymId));
+
     return { member: savedMember, payment, membershipId: result.membershipId };
   }
 
@@ -130,6 +136,8 @@ export class MembersService {
       details: `Updated member: ${member.name}`,
     });
 
+    this.cache.scheduleInvalidation(String(gymId));
+
     return member;
   }
 
@@ -155,6 +163,8 @@ export class MembersService {
       entityId: id,
       details: `Deleted member: ${member.name}`,
     });
+
+    this.cache.scheduleInvalidation(String(gymId));
 
     return { success: true };
   }

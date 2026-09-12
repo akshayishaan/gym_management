@@ -15,12 +15,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/jwt": "^12.0.1",
     "@nestjs/platform-express": "^11.0.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^6.3.4",
+    "ioredis": "^5.11.1",
     "mongoose": "^8.15.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -32,6 +35,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.0",
     "@types/node": "^24.13.4",
+    "openapi3-ts": "^4.6.1",
     "prettier": "^3.4.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"

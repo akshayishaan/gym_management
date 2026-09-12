@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { Types } from "mongoose";
 import { Membership } from "../schemas";
 import { MongoConnectionService } from "../database";
+import { CacheService } from "../cache";
 import type { AuthenticatedUser } from "../auth";
 import { reversePlanPurchase } from "../lib";
 import { paymentActionSchema } from "../payments/payment.schemas";
@@ -13,7 +14,10 @@ import { paymentActionSchema } from "../payments/payment.schemas";
  */
 @Injectable()
 export class MembershipsService {
-  constructor(private readonly connection: MongoConnectionService) {}
+  constructor(
+    private readonly connection: MongoConnectionService,
+    private readonly cache: CacheService,
+  ) {}
 
   async list(gymId: Types.ObjectId, memberId?: string) {
     await this.connection.getConnection();
@@ -31,7 +35,7 @@ export class MembershipsService {
 
     const validated = paymentActionSchema.parse(body);
 
-    return reversePlanPurchase({
+    const result = await reversePlanPurchase({
       gymId: String(gymId),
       requestId: validated.requestId,
       actor: { id: user.id, name: user.name },
@@ -39,5 +43,9 @@ export class MembershipsService {
       membershipId: id,
       reason: validated.reason,
     });
+
+    this.cache.scheduleInvalidation(String(gymId));
+
+    return result;
   }
 }
