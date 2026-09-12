@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/auth/auth_gate.dart';
+import 'core/settings/gym_switch_guard.dart';
+import 'core/settings/gym_switcher.dart';
 import 'core/settings/theme_controller.dart';
 import 'layout/shell.dart';
 import 'screens/members_screen.dart';
@@ -33,7 +36,7 @@ class GymManagerApp extends ConsumerWidget {
       theme: theme,
       darkTheme: darkTheme,
       themeMode: themeMode,
-      home: const _RootShell(),
+      home: const AuthGate(child: _RootShell()),
     );
   }
 }
@@ -62,19 +65,22 @@ class _RootShellState extends ConsumerState<_RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    return AppShell(
-      mode: ShellMode.tabRoot,
-      title: _titles[_selectedIndex],
-      selectedIndex: _selectedIndex,
-      onSelectTab: (int index) => setState(() => _selectedIndex = index),
-      child: IndexedStack(
-        index: _selectedIndex,
-        children: const <Widget>[
-          TodayScreen(),
-          MembersScreen(),
-          PaymentsScreen(),
-          MoreScreen(),
-        ],
+    return GymSwitchGuard(
+      child: AppShell(
+        mode: ShellMode.tabRoot,
+        title: _titles[_selectedIndex],
+        selectedIndex: _selectedIndex,
+        onSelectTab: (int index) => setState(() => _selectedIndex = index),
+        trailing: const GymSwitcher(),
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: const <Widget>[
+            TodayScreen(),
+            MembersScreen(),
+            PaymentsScreen(),
+            MoreScreen(),
+          ],
+        ),
       ),
     );
   }
