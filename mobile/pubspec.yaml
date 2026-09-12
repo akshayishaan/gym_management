@@ -1,0 +1,36 @@
+name: gym_manager
+description: >-
+  Mobile-only gym management SaaS client. Material 3, Riverpod, dio,
+  freezed/json_serializable. Scaffold + design system + navigation shell
+  (Issue 13), with placeholder screens for Issues 14-18.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  dio: ^5.4.3
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  freezed: ^2.5.2
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
