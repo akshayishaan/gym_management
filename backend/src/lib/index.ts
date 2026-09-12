@@ -31,3 +31,14 @@ export {
   buildWhatsAppLink,
   generateInvoiceNumber,
 } from "./utils";
+
+export { recomputeMemberAggregates } from "./memberLedger";
+
+export {
+  onboardMember,
+  recordPayment,
+  voidPayment,
+  refundPayment,
+  reversePlanPurchase,
+  type LifecycleResult,
+} from "./membershipLifecycle";
