@@ -36,40 +36,43 @@ class AppCanvas extends StatelessWidget {
     const Alignment primaryCenter = Alignment(0.84, -0.96);
     const Alignment accentCenter = Alignment(-1.1, -0.1);
 
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        // Layer 1 (bottom) — flat background.
-        ColoredBox(color: t.background),
-        // Layer 2 — accent wash from the left edge.
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: accentCenter,
-              radius: 1.4,
-              colors: <Color>[
-                withOpacity(t.accent.value, 0.55),
-                withOpacity(t.accent.value, 0),
-              ],
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          // Layer 1 (bottom) — flat background.
+          ColoredBox(color: t.background),
+          // Layer 2 — accent wash from the left edge.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: accentCenter,
+                radius: 1.4,
+                colors: <Color>[
+                  withOpacity(t.accent.value, 0.55),
+                  withOpacity(t.accent.value, 0),
+                ],
+              ),
             ),
           ),
-        ),
-        // Layer 3 (top glow) — primary halo in the top-right.
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: primaryCenter,
-              radius: 1.6,
-              colors: <Color>[
-                withOpacity(t.primary.value, 0.11),
-                withOpacity(t.primary.value, 0),
-              ],
+          // Layer 3 (top glow) — primary halo in the top-right.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: primaryCenter,
+                radius: 1.6,
+                colors: <Color>[
+                  withOpacity(t.primary.value, 0.11),
+                  withOpacity(t.primary.value, 0),
+                ],
+              ),
             ),
           ),
-        ),
-        // Layer 4 — content.
-        child,
-      ],
+          // Layer 4 — content.
+          child,
+        ],
+      ),
     );
   }
 }

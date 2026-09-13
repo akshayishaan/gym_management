@@ -18,7 +18,7 @@ There is **no test runner configured**. Type-checking happens via `npm run build
 
 **Schema changes need a dev-server restart.** Models use the `mongoose.models.X || mongoose.model(...)` guard, so an already-running `next dev` process keeps the *old* compiled schema after you edit a model file. New fields silently won't persist until the process is restarted.
 
-**Deployment:** the repository targets Vercel's Next.js runtime and has no Docker deployment path. Configure the external transaction-capable MongoDB connection and NextAuth variables in Vercel. Create the initial admin through the public signup flow.
+**Deployment:** the repository targets Vercel's Next.js runtime and has no Docker deployment path. Configure the external transaction-capable MongoDB connection and `NEXTAUTH_SECRET` in Vercel. NextAuth detects Vercel's generated `VERCEL_URL`; set `NEXTAUTH_URL` only after a stable production or custom domain exists. Create the initial admin through the public signup flow.
 
 Path alias: `@/*` maps to the repo root.
 

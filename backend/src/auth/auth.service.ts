@@ -3,6 +3,7 @@ import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Staff, type IStaff } from "../schemas";
 import { MongoConfigService } from "../config";
+import { MongoConnectionService } from "../database";
 import { AuthError, DomainError } from "../common";
 import {
   loginSchema,
@@ -39,9 +40,11 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly config: MongoConfigService,
+    private readonly connection: MongoConnectionService,
   ) {}
 
   async login(input: LoginInput): Promise<AuthSession> {
+    await this.connection.getConnection();
     const parsed = loginSchema.parse(input);
     const staff = await Staff.findOne({
       email: parsed.email.toLowerCase(),
@@ -58,6 +61,7 @@ export class AuthService {
   }
 
   async signup(input: SignupInput): Promise<{ message: string }> {
+    await this.connection.getConnection();
     const parsed = signupSchema.parse(input);
     const existing = await Staff.findOne({
       email: parsed.email.toLowerCase(),
@@ -80,6 +84,7 @@ export class AuthService {
   }
 
   async refresh(input: RefreshInput): Promise<AuthSession> {
+    await this.connection.getConnection();
     const parsed = refreshSchema.parse(input);
 
     let payload: { sub: string };

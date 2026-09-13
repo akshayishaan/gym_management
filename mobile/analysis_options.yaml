@@ -15,3 +15,4 @@ analyzer:
     # Generated client SDK — has its own analysis_options.yaml and is
     # analyzed via `dart analyze` inside packages/gym_api.
     - packages/gym_api/**
+    - android/**

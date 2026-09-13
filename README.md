@@ -21,7 +21,7 @@ The application always connects to an external, transaction-capable MongoDB depl
    - `MONGODB_URI`
    - `MONGODB_USERNAME` and `MONGODB_PASSWORD` when credentials are not embedded in the URI
    - `NEXTAUTH_SECRET`
-   - `NEXTAUTH_URL`, set to the final `https://` deployment domain
+   - `NEXTAUTH_URL` is optional for the first deployment because NextAuth detects Vercel's generated `VERCEL_URL`. Set it later when you have a stable production or custom domain.
 3. Deploy, then create the initial administrator through `/login` → **Sign Up**.
 
 MongoDB must support transactions; MongoDB Atlas is suitable. Vercel Hobby deployments do not have fixed outbound IP addresses, so configure Atlas network access accordingly and use strong database credentials. Do not commit `.env` or Vercel's local `.vercel` directory.
