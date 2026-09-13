@@ -3,6 +3,7 @@
 //
 
 // ignore_for_file: unused_element
+import 'package:gym_api/src/model/member_display_status.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:equatable/src/equatable_utils.dart';
 
@@ -52,6 +53,10 @@ class MemberResponse {
     required  this.dueAmount,
 
     required  this.isActive,
+
+     this.status,
+
+     this.daysUntilExpiry,
 
     required  this.createdAt,
 
@@ -268,6 +273,30 @@ class MemberResponse {
 
 
 
+  @JsonKey(
+    
+    name: r'status',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final MemberDisplayStatus? status;
+
+
+
+  @JsonKey(
+    
+    name: r'daysUntilExpiry',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final int? daysUntilExpiry;
+
+
+
       /// ISO 8601 date-time string
   @JsonKey(
     
@@ -318,6 +347,8 @@ class MemberResponse {
             emergencyContact,
             dueAmount,
             isActive,
+            status,
+            daysUntilExpiry,
             createdAt,
             updatedAt,
         ],
@@ -339,6 +370,8 @@ class MemberResponse {
             other.emergencyContact,
             other.dueAmount,
             other.isActive,
+            other.status,
+            other.daysUntilExpiry,
             other.createdAt,
             other.updatedAt,
         ]
@@ -365,6 +398,8 @@ class MemberResponse {
         emergencyContact,
         dueAmount,
         isActive,
+        status,
+        daysUntilExpiry,
         createdAt,
         updatedAt,
     ],);

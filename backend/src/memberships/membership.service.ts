@@ -1,11 +1,26 @@
 import { Injectable } from "@nestjs/common";
 import type { Types } from "mongoose";
-import { Membership } from "../schemas";
+import { Membership, Gym } from "../schemas";
 import { MongoConnectionService } from "../database";
 import { CacheService } from "../cache";
 import type { AuthenticatedUser } from "../auth";
-import { reversePlanPurchase } from "../lib";
+import { calendarDaysBetween, membershipStatus, reversePlanPurchase, todayInTimeZone } from "../lib";
 import { paymentActionSchema } from "../payments/payment.schemas";
+
+/**
+ * Attaches the server-computed display fields (ADR-0005): the gym-local expiry
+ * status and the inclusive membership duration in days.
+ */
+function withDisplayStatus<T extends { startDate: string; expiryDate: string }>(
+  membership: T,
+  today: string,
+): T & { expiryStatus: ReturnType<typeof membershipStatus>; durationDays: number } {
+  return {
+    ...membership,
+    expiryStatus: membershipStatus(membership.expiryDate, today),
+    durationDays: calendarDaysBetween(membership.startDate, membership.expiryDate) + 1,
+  };
+}
 
 /**
  * Membership history listing and plan-purchase reversal with 1:1 parity to the
@@ -25,9 +40,12 @@ export class MembershipsService {
     const query: Record<string, unknown> = { gymId };
     if (memberId) query.memberId = memberId;
 
+    const gym = await Gym.findById(gymId).select("timezone").lean();
+    const today = todayInTimeZone(gym?.timezone || "Asia/Kolkata");
+
     const memberships = await Membership.find(query).sort({ expiryDate: -1 }).lean();
 
-    return { memberships };
+    return { memberships: memberships.map((m) => withDisplayStatus(m, today)) };
   }
 
   async reverse(gymId: Types.ObjectId, user: AuthenticatedUser, id: string, body: unknown) {

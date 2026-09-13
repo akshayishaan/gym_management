@@ -28,6 +28,17 @@ const dateKeys = new Set([
 
 const tokenKeys = new Set(["accessToken", "refreshToken"]);
 
+// NestJS-only display-status keys (ADR-0005). The Next.js API omits them (the
+// web computes display status client-side), so a NestJS response carries keys
+// the Next response lacks. Masking the VALUE would still leave the key present
+// on one side and absent on the other, which `diffValues` reports as
+// `<missing>` — so these keys are DROPPED entirely during normalization.
+const displayStatusKeys = new Set(["daysUntilExpiry", "expiryStatus"]);
+
+// Sentinel returned by `normalizeField` when a key should be omitted from the
+// normalized result. `reduceEntries` recognizes it and skips the key.
+const DROP = Symbol("drop");
+
 const HEX_ID_RE = /^[0-9a-f]{24}$/;
 
 // Report plan keys (e.g. "id:gold", "legacy:silver").
@@ -53,34 +64,35 @@ function isIsoDate(value: string): boolean {
   return ISO_DATE_RE.test(value);
 }
 
-export function normalizeValue(value: unknown): unknown {
+export function normalizeValue(value: unknown, step?: string): unknown {
   if (Array.isArray(value)) {
-    return value.map((item) => normalizeValue(item));
+    return value.map((item) => normalizeValue(item, step));
   }
 
   if (isPlainObject(value)) {
-    return reduceEntries(value);
+    return reduceEntries(value, step);
   }
 
   if (typeof value === "string") {
-    return normalizeString(value);
+    return normalizeString(value, step);
   }
 
   // number / boolean / null / undefined pass through unchanged.
   return value;
 }
 
-function reduceEntries(obj: Record<string, unknown>): Record<string, unknown> {
+function reduceEntries(obj: Record<string, unknown>, step?: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    result[key] = normalizeField(key, value);
+    const normalized = normalizeField(key, value, step);
+    if (normalized !== DROP) result[key] = normalized;
   }
 
   return result;
 }
 
-function normalizeField(key: string, value: unknown): unknown {
+function normalizeField(key: string, value: unknown, step?: string): unknown {
   // Token-shaped values win regardless of key.
   if (typeof value === "string" && JWT_RE.test(value)) {
     return "<token>";
@@ -91,40 +103,70 @@ function normalizeField(key: string, value: unknown): unknown {
       if (HEX_ID_RE.test(value)) return "<id>";
       if (PLAN_KEY_RE.test(value)) return "<planKey>";
     }
-    return normalizeValue(value);
+    return normalizeValue(value, step);
   }
 
   if (key === "_id") {
     if (typeof value === "string" && HEX_ID_RE.test(value)) return "<id>";
-    return normalizeValue(value);
+    return normalizeValue(value, step);
   }
 
   if (dateKeys.has(key)) {
     if (typeof value === "string" && isIsoDate(value)) return "<date>";
-    return normalizeValue(value);
+    return normalizeValue(value, step);
   }
 
   if (key === "invoiceNumber") {
     if (typeof value === "string" && INVOICE_RE.test(value)) return "<invoice>";
-    return normalizeValue(value);
+    return normalizeValue(value, step);
   }
 
   if (tokenKeys.has(key)) {
     if (typeof value === "string") return "<token>";
-    return normalizeValue(value);
+    return normalizeValue(value, step);
   }
 
-  return normalizeValue(value);
+  // Display-status fields (nest-only): drop them so the diff ignores them.
+  if (displayStatusKeys.has(key)) return DROP;
+
+  // `durationDays` is nest-only on MEMBERSHIP objects but a genuine plan field
+  // (present on both backends). Drop it only within membership steps so the
+  // plan's `durationDays` stays checked.
+  if (key === "durationDays" && isMembershipStep(step)) return DROP;
+
+  // `status` has three meanings: member display status (nest-only), membership
+  // reversal status, and payment status. Only the member meaning is nest-only,
+  // so drop `status` only within member steps and leave membership/payment
+  // `status` untouched.
+  if (key === "status" && isMemberStep(step)) return DROP;
+
+  return normalizeValue(value, step);
 }
 
-function normalizeString(value: string): unknown {
+/**
+ * True when the step belongs to a member list/get (`members.*`), where any
+ * `status` key is the nest-only member display status.
+ */
+function isMemberStep(step?: string): boolean {
+  return step !== undefined && step.startsWith("members.");
+}
+
+/**
+ * True when the step belongs to the membership history (`memberships.*`), where
+ * any `durationDays` key is the nest-only membership display field.
+ */
+function isMembershipStep(step?: string): boolean {
+  return step !== undefined && step.startsWith("memberships.");
+}
+
+function normalizeString(value: string, step?: string): unknown {
   // JSON-encoded fields (only attempt when it clearly looks like JSON).
   if (value.startsWith("{") || value.startsWith("[")) {
     const trimmed = value.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       try {
         const parsed: unknown = JSON.parse(trimmed);
-        return stableSerialize(normalizeValue(parsed));
+        return stableSerialize(normalizeValue(parsed, step));
       } catch {
         // Not valid JSON — fall through to other rules.
       }

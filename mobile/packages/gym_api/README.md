@@ -114,6 +114,7 @@ Class | Method | HTTP request | Description
  - [LoginInput](doc/LoginInput.md)
  - [MemberCreateInput](doc/MemberCreateInput.md)
  - [MemberCreateResponse](doc/MemberCreateResponse.md)
+ - [MemberDisplayStatus](doc/MemberDisplayStatus.md)
  - [MemberListResponse](doc/MemberListResponse.md)
  - [MemberResponse](doc/MemberResponse.md)
  - [MemberUpdateInput](doc/MemberUpdateInput.md)

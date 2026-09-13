@@ -41,6 +41,10 @@ MembershipResponse _$MembershipResponseFromJson(Map<String, dynamic> json) =>
           notes: $checkedConvert('notes', (v) => v as String?),
           status: $checkedConvert('status',
               (v) => $enumDecode(_$MembershipResponseStatusEnumEnumMap, v)),
+          expiryStatus: $checkedConvert('expiryStatus',
+              (v) => $enumDecodeNullable(_$MemberDisplayStatusEnumMap, v)),
+          durationDays:
+              $checkedConvert('durationDays', (v) => (v as num?)?.toInt()),
           reversedAt: $checkedConvert('reversedAt', (v) => v as String?),
           reversedBy: $checkedConvert('reversedBy', (v) => v as String?),
           reversalReason:
@@ -76,6 +80,9 @@ Map<String, dynamic> _$MembershipResponseToJson(MembershipResponse instance) {
   val['grantedBy'] = instance.grantedBy;
   writeNotNull('notes', instance.notes);
   val['status'] = _$MembershipResponseStatusEnumEnumMap[instance.status]!;
+  writeNotNull(
+      'expiryStatus', _$MemberDisplayStatusEnumMap[instance.expiryStatus]);
+  writeNotNull('durationDays', instance.durationDays);
   writeNotNull('reversedAt', instance.reversedAt);
   writeNotNull('reversedBy', instance.reversedBy);
   writeNotNull('reversalReason', instance.reversalReason);
@@ -87,4 +94,10 @@ Map<String, dynamic> _$MembershipResponseToJson(MembershipResponse instance) {
 const _$MembershipResponseStatusEnumEnumMap = {
   MembershipResponseStatusEnum.active: 'active',
   MembershipResponseStatusEnum.reversed: 'reversed',
+};
+
+const _$MemberDisplayStatusEnumMap = {
+  MemberDisplayStatus.active: 'active',
+  MemberDisplayStatus.expiring: 'expiring',
+  MemberDisplayStatus.expired: 'expired',
 };

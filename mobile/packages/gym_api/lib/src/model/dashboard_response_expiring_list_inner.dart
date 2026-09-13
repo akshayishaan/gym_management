@@ -28,6 +28,8 @@ class DashboardResponseExpiringListInner {
     required  this.membershipExpiry,
 
      this.planName,
+
+    required  this.daysUntilExpiry,
   });
 
       /// Mongo ObjectId serialized as a string
@@ -92,6 +94,18 @@ class DashboardResponseExpiringListInner {
 
 
 
+  @JsonKey(
+    
+    name: r'daysUntilExpiry',
+    required: true,
+    includeIfNull: false,
+  )
+
+
+  final int daysUntilExpiry;
+
+
+
 
     bool operator ==(Object other) {
       return identical(this, other) ||
@@ -104,6 +118,7 @@ class DashboardResponseExpiringListInner {
             phone,
             membershipExpiry,
             planName,
+            daysUntilExpiry,
         ],
         [
             other.id,
@@ -111,6 +126,7 @@ class DashboardResponseExpiringListInner {
             other.phone,
             other.membershipExpiry,
             other.planName,
+            other.daysUntilExpiry,
         ]
       );
     }
@@ -123,6 +139,7 @@ class DashboardResponseExpiringListInner {
         phone,
         membershipExpiry,
         planName,
+        daysUntilExpiry,
     ],);
 
   factory DashboardResponseExpiringListInner.fromJson(Map<String, dynamic> json) => _$DashboardResponseExpiringListInnerFromJson(json);

@@ -44,3 +44,41 @@ RUN_ID=run1               npm run diff      # print pass/fail summary, exit 1 on
 
 Transcripts land in `out/parity.<RUN_ID>.<BACKEND>.json`. `out/` is
 git-ignored.
+
+## Verifying server-computed display status
+
+The NestJS backend computes gym-local **display status** fields server-side
+(ADR-0005); the Next.js API does **not** return them (the web derives them
+client-side). These fields are therefore NestJS-only:
+
+| Field                          | Location                                        | Meaning                                   |
+| ------------------------------ | ----------------------------------------------- | ----------------------------------------- |
+| `member.status`                | member list / member detail                     | `active` \| `expiring` \| `expired`       |
+| `member.daysUntilExpiry`       | member list / member detail                     | days until `membershipExpiry`             |
+| `membership.expiryStatus`      | membership history                              | `active` \| `expiring` \| `expired`       |
+| `membership.durationDays`      | membership history                              | inclusive days (`start`→`expiry` + 1)     |
+| `expiringList[].daysUntilExpiry` | dashboard                                     | days until `membershipExpiry`             |
+
+They cannot be diffed (the Next side would always show `<missing>`), so the
+normalization layer **drops** them, and a dedicated verifier re-derives them
+from the seed's known dates and checks the NestJS transcript:
+
+```bash
+RUN_ID=run1 npm run verify-display-status   # recompute + assert, exit 1 on failure
+```
+
+### Masking of the new fields
+
+Because these keys are absent from the Next response, normalizing must drop
+them (a masked value would still surface as `<missing>`). The drop rules are
+surgical to avoid weakening existing checks:
+
+- `daysUntilExpiry` and `expiryStatus` are dropped everywhere (nest-only keys).
+- `durationDays` is dropped only within `memberships.*` steps — the plan object
+  also carries a `durationDays` (checked across both backends), so it must not
+  be dropped globally.
+- `status` is dropped only within `members.*` steps — on membership objects it
+  is the reversal status (`active`/`reversed`) and on payments it is
+  `paid`/`voided`/`refunded`, both of which are present on both backends and
+  stay checked.
+

@@ -21,6 +21,8 @@ Name | Type | Description | Notes
 **grantedBy** | **String** | Mongo ObjectId serialized as a string | 
 **notes** | **String** |  | [optional] 
 **status** | **String** |  | 
+**expiryStatus** | [**MemberDisplayStatus**](MemberDisplayStatus.md) |  | [optional] 
+**durationDays** | **int** |  | [optional] 
 **reversedAt** | **String** | ISO 8601 date-time string | [optional] 
 **reversedBy** | **String** | Mongo ObjectId serialized as a string | [optional] 
 **reversalReason** | **String** |  | [optional] 

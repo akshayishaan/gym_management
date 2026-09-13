@@ -46,6 +46,10 @@ MemberResponse _$MemberResponseFromJson(Map<String, dynamic> json) =>
               $checkedConvert('emergencyContact', (v) => v as String?),
           dueAmount: $checkedConvert('dueAmount', (v) => v as num),
           isActive: $checkedConvert('isActive', (v) => v as bool),
+          status: $checkedConvert('status',
+              (v) => $enumDecodeNullable(_$MemberDisplayStatusEnumMap, v)),
+          daysUntilExpiry:
+              $checkedConvert('daysUntilExpiry', (v) => (v as num?)?.toInt()),
           createdAt: $checkedConvert('createdAt', (v) => v as String),
           updatedAt: $checkedConvert('updatedAt', (v) => v as String),
         );
@@ -81,6 +85,8 @@ Map<String, dynamic> _$MemberResponseToJson(MemberResponse instance) {
   writeNotNull('emergencyContact', instance.emergencyContact);
   val['dueAmount'] = instance.dueAmount;
   val['isActive'] = instance.isActive;
+  writeNotNull('status', _$MemberDisplayStatusEnumMap[instance.status]);
+  writeNotNull('daysUntilExpiry', instance.daysUntilExpiry);
   val['createdAt'] = instance.createdAt;
   val['updatedAt'] = instance.updatedAt;
   return val;
@@ -90,4 +96,10 @@ const _$MemberResponseGenderEnumEnumMap = {
   MemberResponseGenderEnum.male: 'male',
   MemberResponseGenderEnum.female: 'female',
   MemberResponseGenderEnum.other: 'other',
+};
+
+const _$MemberDisplayStatusEnumMap = {
+  MemberDisplayStatus.active: 'active',
+  MemberDisplayStatus.expiring: 'expiring',
+  MemberDisplayStatus.expired: 'expired',
 };

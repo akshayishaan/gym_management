@@ -1,4 +1,5 @@
 import { createRequestId } from "./uuid";
+import { todayInGymTz } from "./displayStatus";
 import type { AuthSession, TranscriptStep } from "./types";
 
 export interface SeedIds {
@@ -73,16 +74,6 @@ function requireId(candidate: unknown, body: unknown, label: string): string {
   const fallback = findNestedHex(body);
   if (fallback) return fallback;
   throw new Error(`seed: required id "${label}" missing from response`);
-}
-
-function todayInGymTz(): string {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return formatter.format(new Date());
 }
 
 async function runStep(

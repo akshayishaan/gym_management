@@ -39,22 +39,43 @@ final scopeLastFetchProvider =
   ScopeLastFetch.new,
 );
 
+/// Every gym-scoped family invalidated by [invalidateGymScope] and
+/// [invalidateGymScopeFromWidget].
+final List<ProviderOrFamily> _gymScopedProviders = <ProviderOrFamily>[
+  dashboardProvider,
+  membersProvider,
+  memberProvider,
+  membershipsProvider,
+  paymentsProvider,
+  plansProvider,
+  reportsProvider,
+  activityProvider,
+];
+
+void _invalidateGymScopeProviders(
+  void Function(ProviderOrFamily provider) invalidate,
+) {
+  for (final ProviderOrFamily provider in _gymScopedProviders) {
+    invalidate(provider);
+  }
+}
+
 /// Invalidates every gym-scoped family for the selected gym.
 ///
 /// Relies on `ref.invalidate(family)` which, in riverpod 2.6.1, invalidates
 /// all currently-alive instances of a family (see `container.invalidate`).
-void invalidateGymScope(Ref ref) {
-  ref.invalidate(dashboardProvider);
-  ref.invalidate(membersProvider);
-  ref.invalidate(memberProvider);
-  ref.invalidate(membershipsProvider);
-  ref.invalidate(paymentsProvider);
-  ref.invalidate(plansProvider);
-  ref.invalidate(reportsProvider);
-  ref.invalidate(activityProvider);
-}
+void invalidateGymScope(Ref ref) =>
+    _invalidateGymScopeProviders(ref.invalidate);
 
 /// Invalidates the (non-gym-scoped) gyms list.
 void invalidateGyms(Ref ref) {
   ref.invalidate(gymsProvider);
 }
+
+/// Widget-facing variant of [invalidateGymScope] for use inside
+/// `ConsumerWidget`/`ConsumerStatefulWidget` (where `ref` is a [WidgetRef]).
+///
+/// `WidgetRef` and `Ref` expose the same `invalidate` surface but are
+/// unrelated types, so forms and other widgets route through this helper.
+void invalidateGymScopeFromWidget(WidgetRef ref) =>
+    _invalidateGymScopeProviders(ref.invalidate);

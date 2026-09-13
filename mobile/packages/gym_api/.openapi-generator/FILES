@@ -20,6 +20,7 @@ doc/LifecycleResultResponse.md
 doc/LoginInput.md
 doc/MemberCreateInput.md
 doc/MemberCreateResponse.md
+doc/MemberDisplayStatus.md
 doc/MemberListResponse.md
 doc/MemberResponse.md
 doc/MemberUpdateInput.md
@@ -80,6 +81,7 @@ lib/src/model/lifecycle_result_response.dart
 lib/src/model/login_input.dart
 lib/src/model/member_create_input.dart
 lib/src/model/member_create_response.dart
+lib/src/model/member_display_status.dart
 lib/src/model/member_list_response.dart
 lib/src/model/member_response.dart
 lib/src/model/member_update_input.dart
@@ -114,3 +116,4 @@ lib/src/model/reports_response_summary_revenue.dart
 lib/src/model/signup_input.dart
 lib/src/model/signup_response.dart
 lib/src/model/success_response.dart
+test/member_display_status_test.dart

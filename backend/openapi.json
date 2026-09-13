@@ -559,6 +559,14 @@
           "updatedAt"
         ]
       },
+      "MemberDisplayStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "expiring",
+          "expired"
+        ]
+      },
       "MemberResponse": {
         "type": "object",
         "properties": {
@@ -623,6 +631,12 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MemberDisplayStatus"
+          },
+          "daysUntilExpiry": {
+            "type": "integer"
           },
           "createdAt": {
             "type": "string",
@@ -1446,6 +1460,12 @@
               "reversed"
             ]
           },
+          "expiryStatus": {
+            "$ref": "#/components/schemas/MemberDisplayStatus"
+          },
+          "durationDays": {
+            "type": "integer"
+          },
           "reversedAt": {
             "type": "string",
             "description": "ISO 8601 date-time string"
@@ -1537,6 +1557,12 @@
                     "active",
                     "reversed"
                   ]
+                },
+                "expiryStatus": {
+                  "$ref": "#/components/schemas/MemberDisplayStatus"
+                },
+                "durationDays": {
+                  "type": "integer"
                 },
                 "reversedAt": {
                   "type": "string",
@@ -1655,13 +1681,17 @@
                 },
                 "planName": {
                   "type": "string"
+                },
+                "daysUntilExpiry": {
+                  "type": "integer"
                 }
               },
               "required": [
                 "_id",
                 "name",
                 "phone",
-                "membershipExpiry"
+                "membershipExpiry",
+                "daysUntilExpiry"
               ]
             }
           }

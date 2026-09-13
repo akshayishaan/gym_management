@@ -108,8 +108,8 @@ function main(): void {
       continue;
     }
 
-    const nextBody = normalizeValue(nextStep.body);
-    const nestBody = normalizeValue(nestStep.body);
+    const nextBody = normalizeValue(nextStep.body, nextStep.step);
+    const nestBody = normalizeValue(nestStep.body, nestStep.step);
     const statusEqual = nextStep.status === nestStep.status;
     const bodyEqual = stableSerialize(nextBody) === stableSerialize(nestBody);
 

@@ -14,7 +14,13 @@ DashboardResponseExpiringListInner _$DashboardResponseExpiringListInnerFromJson(
       ($checkedConvert) {
         $checkKeys(
           json,
-          requiredKeys: const ['_id', 'name', 'phone', 'membershipExpiry'],
+          requiredKeys: const [
+            '_id',
+            'name',
+            'phone',
+            'membershipExpiry',
+            'daysUntilExpiry'
+          ],
         );
         final val = DashboardResponseExpiringListInner(
           id: $checkedConvert('_id', (v) => v as String),
@@ -23,6 +29,8 @@ DashboardResponseExpiringListInner _$DashboardResponseExpiringListInnerFromJson(
           membershipExpiry:
               $checkedConvert('membershipExpiry', (v) => v as String),
           planName: $checkedConvert('planName', (v) => v as String?),
+          daysUntilExpiry:
+              $checkedConvert('daysUntilExpiry', (v) => (v as num).toInt()),
         );
         return val;
       },
@@ -45,5 +53,6 @@ Map<String, dynamic> _$DashboardResponseExpiringListInnerToJson(
   }
 
   writeNotNull('planName', instance.planName);
+  val['daysUntilExpiry'] = instance.daysUntilExpiry;
   return val;
 }

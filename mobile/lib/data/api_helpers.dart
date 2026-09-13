@@ -52,3 +52,56 @@ Future<T> getJson<T>(
     throw asApiException(e);
   }
 }
+
+/// POSTs [data] to [path], decodes a JSON object, and maps it to [T].
+///
+/// Same normalization contract as [getJson]: every failure (transport or a
+/// mismatched response body) surfaces as an [ApiException] via [asApiException].
+Future<T> postJson<T>(
+  Dio dio,
+  String path, {
+  Object? data,
+  required T Function(Map<String, dynamic>) fromJson,
+}) async {
+  try {
+    final Response<dynamic> res = await dio.post<dynamic>(path, data: data);
+    return fromJson(decodeJsonMap(res));
+  } catch (e) {
+    throw asApiException(e);
+  }
+}
+
+/// PUTs [data] to [path], decodes a JSON object, and maps it to [T].
+///
+/// Same normalization contract as [getJson].
+Future<T> putJson<T>(
+  Dio dio,
+  String path, {
+  Object? data,
+  required T Function(Map<String, dynamic>) fromJson,
+}) async {
+  try {
+    final Response<dynamic> res = await dio.put<dynamic>(path, data: data);
+    return fromJson(decodeJsonMap(res));
+  } catch (e) {
+    throw asApiException(e);
+  }
+}
+
+/// DELETEs [path] (optionally carrying [data]), decodes a JSON object, and
+/// maps it to [T].
+///
+/// Same normalization contract as [getJson].
+Future<T> deleteJson<T>(
+  Dio dio,
+  String path, {
+  Object? data,
+  required T Function(Map<String, dynamic>) fromJson,
+}) async {
+  try {
+    final Response<dynamic> res = await dio.delete<dynamic>(path, data: data);
+    return fromJson(decodeJsonMap(res));
+  } catch (e) {
+    throw asApiException(e);
+  }
+}

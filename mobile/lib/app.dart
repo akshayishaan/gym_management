@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/auth_gate.dart';
+import 'core/navigation.dart';
 import 'core/settings/gym_switch_guard.dart';
 import 'core/settings/gym_switcher.dart';
 import 'core/settings/theme_controller.dart';
@@ -43,9 +44,10 @@ class GymManagerApp extends ConsumerWidget {
 
 /// Holds the selected tab index and renders the matching tab-root body.
 ///
-/// Tab-root screens (Today/Members/Payments/More) are placeholders for
-/// Issues 15-18; drill-in routing (StackHeader pages) is exercised by the
-/// shell's `ShellMode.stack` but no real drill-in target exists yet.
+/// The selection lives in [selectedTabIndexProvider] (not widget-local state)
+/// so tab-root screens can deep-link to one another. Drill-in pages (e.g. the
+/// member detail screen) are pushed as their own routes and render a
+/// `ShellMode.stack` shell.
 class _RootShell extends ConsumerStatefulWidget {
   const _RootShell();
 
@@ -54,8 +56,6 @@ class _RootShell extends ConsumerStatefulWidget {
 }
 
 class _RootShellState extends ConsumerState<_RootShell> {
-  int _selectedIndex = 0;
-
   static const List<String> _titles = <String>[
     'Today',
     'Members',
@@ -65,15 +65,17 @@ class _RootShellState extends ConsumerState<_RootShell> {
 
   @override
   Widget build(BuildContext context) {
+    final int selectedIndex = ref.watch(selectedTabIndexProvider);
     return GymSwitchGuard(
       child: AppShell(
         mode: ShellMode.tabRoot,
-        title: _titles[_selectedIndex],
-        selectedIndex: _selectedIndex,
-        onSelectTab: (int index) => setState(() => _selectedIndex = index),
+        title: _titles[selectedIndex],
+        selectedIndex: selectedIndex,
+        onSelectTab: (int index) =>
+            ref.read(selectedTabIndexProvider.notifier).state = index,
         trailing: const GymSwitcher(),
         child: IndexedStack(
-          index: _selectedIndex,
+          index: selectedIndex,
           children: const <Widget>[
             TodayScreen(),
             MembersScreen(),

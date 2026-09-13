@@ -3,7 +3,22 @@ import type { Types } from "mongoose";
 import { Gym, Member, Payment } from "../schemas";
 import { MongoConnectionService } from "../database";
 import { CacheService, CACHE_TTL_SECONDS } from "../cache";
-import { addCalendarDays, localDateTimeToInstant, todayInTimeZone } from "../lib";
+import { addCalendarDays, calendarDaysBetween, localDateTimeToInstant, todayInTimeZone } from "../lib";
+
+/**
+ * Attaches the server-computed days-until-expiry (ADR-0005) to each expiring
+ * list row. The expiringList query filters on `membershipExpiry`, so every
+ * returned document carries one.
+ */
+function withDaysUntilExpiry<T extends { membershipExpiry?: string }>(
+  member: T,
+  today: string,
+): T & { daysUntilExpiry: number } {
+  return {
+    ...member,
+    daysUntilExpiry: calendarDaysBetween(today, member.membershipExpiry!),
+  };
+}
 
 /**
  * Gym dashboard summary. 1:1 parity with the Next.js `app/api/dashboard` route:
@@ -62,6 +77,8 @@ export class DashboardService {
             .lean(),
         ]);
 
+        const expiringWithDays = expiringList.map((m) => withDaysUntilExpiry(m, today));
+
         return {
           totalMembers,
           activeMembers,
@@ -69,7 +86,7 @@ export class DashboardService {
           expiringMembers,
           monthRevenue: (monthCollections[0]?.total || 0) - (monthRefunds[0]?.total || 0),
           recentPayments,
-          expiringList,
+          expiringList: expiringWithDays,
         };
       },
     );

@@ -3,6 +3,7 @@
 //
 
 // ignore_for_file: unused_element
+import 'package:gym_api/src/model/member_display_status.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:equatable/src/equatable_utils.dart';
 
@@ -44,6 +45,10 @@ class MembershipListResponseMembershipsInner {
      this.notes,
 
     required  this.status,
+
+     this.expiryStatus,
+
+     this.durationDays,
 
      this.reversedAt,
 
@@ -220,6 +225,30 @@ class MembershipListResponseMembershipsInner {
 
 
 
+  @JsonKey(
+    
+    name: r'expiryStatus',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final MemberDisplayStatus? expiryStatus;
+
+
+
+  @JsonKey(
+    
+    name: r'durationDays',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final int? durationDays;
+
+
+
       /// ISO 8601 date-time string
   @JsonKey(
     
@@ -304,6 +333,8 @@ class MembershipListResponseMembershipsInner {
             grantedBy,
             notes,
             status,
+            expiryStatus,
+            durationDays,
             reversedAt,
             reversedBy,
             reversalReason,
@@ -324,6 +355,8 @@ class MembershipListResponseMembershipsInner {
             other.grantedBy,
             other.notes,
             other.status,
+            other.expiryStatus,
+            other.durationDays,
             other.reversedAt,
             other.reversedBy,
             other.reversalReason,
@@ -349,6 +382,8 @@ class MembershipListResponseMembershipsInner {
         grantedBy,
         notes,
         status,
+        expiryStatus,
+        durationDays,
         reversedAt,
         reversedBy,
         reversalReason,

@@ -6,7 +6,13 @@ import { MongoConnectionService } from "../database";
 import { CacheService } from "../cache";
 import type { AuthenticatedUser } from "../auth";
 import { onboardMember } from "../lib";
-import { addCalendarDays, partialPlanNamePattern, todayInTimeZone } from "../lib";
+import {
+  addCalendarDays,
+  calendarDaysBetween,
+  membershipStatus,
+  partialPlanNamePattern,
+  todayInTimeZone,
+} from "../lib";
 import { memberCreateSchema, memberUpdateSchema } from "./member.schemas";
 
 interface ListParams {
@@ -14,6 +20,25 @@ interface ListParams {
   status?: string;
   page?: string;
   limit?: string;
+}
+
+type MemberDisplayStatus = ReturnType<typeof membershipStatus>;
+
+/**
+ * Mirrors the web `MemberCard`: members without a `membershipExpiry` render no
+ * status/days badge (`null`), so we leave the document untouched rather than
+ * attaching empty fields.
+ */
+function withDisplayStatus<T extends { membershipExpiry?: string }>(
+  member: T,
+  today: string,
+): T | (T & { status: MemberDisplayStatus; daysUntilExpiry: number }) {
+  if (!member.membershipExpiry) return member;
+  return {
+    ...member,
+    status: membershipStatus(member.membershipExpiry, today),
+    daysUntilExpiry: calendarDaysBetween(today, member.membershipExpiry),
+  };
 }
 
 /**
@@ -68,7 +93,7 @@ export class MembersService {
         .lean(),
     ]);
 
-    return { members, total, page, limit };
+    return { members: members.map((m) => withDisplayStatus(m, today)), total, page, limit };
   }
 
   async create(user: AuthenticatedUser, gymId: Types.ObjectId, body: unknown) {
@@ -114,7 +139,10 @@ export class MembersService {
     const member = await Member.findOne({ _id: id, gymId }).lean();
     if (!member) throw new DomainError("Not found", 404);
 
-    return member;
+    const gym = await Gym.findById(gymId).select("timezone").lean();
+    const today = todayInTimeZone(gym?.timezone || "Asia/Kolkata");
+
+    return withDisplayStatus(member, today);
   }
 
   async update(gymId: Types.ObjectId, id: string, body: unknown, user: AuthenticatedUser) {

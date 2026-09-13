@@ -25,6 +25,8 @@ Name | Type | Description | Notes
 **emergencyContact** | **String** |  | [optional] 
 **dueAmount** | **num** |  | 
 **isActive** | **bool** |  | 
+**status** | [**MemberDisplayStatus**](MemberDisplayStatus.md) |  | [optional] 
+**daysUntilExpiry** | **int** |  | [optional] 
 **createdAt** | **String** | ISO 8601 date-time string | 
 **updatedAt** | **String** | ISO 8601 date-time string | 
 

@@ -102,6 +102,9 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return MemberCreateInput.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'MemberCreateResponse':
           return MemberCreateResponse.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'MemberDisplayStatus':
+          
+          
         case 'MemberListResponse':
           return MemberListResponse.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'MemberResponse':

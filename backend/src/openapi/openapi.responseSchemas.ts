@@ -33,6 +33,8 @@ const paymentMethodEnum = z.enum(["cash", "card", "upi", "bank_transfer", "other
 const paymentKindEnum = z.enum(["plan_purchase", "dues"]);
 const paymentStatusEnum = z.enum(["paid", "voided", "refunded"]);
 const membershipStatusEnum = z.enum(["active", "reversed"]);
+const memberDisplayStatusEnum = z.enum(["active", "expiring", "expired"]);
+const memberDisplayStatusRef = memberDisplayStatusEnum.openapi("MemberDisplayStatus");
 
 // --- Common ---
 
@@ -102,6 +104,8 @@ export const memberResponseSchema = z.object({
   emergencyContact: z.string().optional(),
   dueAmount: z.number(),
   isActive: z.boolean(),
+  status: memberDisplayStatusRef.optional(),
+  daysUntilExpiry: z.number().int().optional(),
   createdAt: isoDate,
   updatedAt: isoDate,
 });
@@ -244,6 +248,8 @@ export const membershipResponseSchema = z.object({
   grantedBy: objectId,
   notes: z.string().optional(),
   status: membershipStatusEnum,
+  expiryStatus: memberDisplayStatusRef.optional(),
+  durationDays: z.number().int().optional(),
   reversedAt: isoDate.optional(),
   reversedBy: objectId.optional(),
   reversalReason: z.string().optional(),
@@ -279,6 +285,7 @@ export const dashboardResponseSchema = z.object({
       phone: z.string(),
       membershipExpiry: dateOnly,
       planName: z.string().optional(),
+      daysUntilExpiry: z.number().int(),
     }),
   ),
 });

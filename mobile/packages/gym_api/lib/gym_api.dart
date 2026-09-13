@@ -28,6 +28,7 @@ export 'package:gym_api/src/model/lifecycle_result_response.dart';
 export 'package:gym_api/src/model/login_input.dart';
 export 'package:gym_api/src/model/member_create_input.dart';
 export 'package:gym_api/src/model/member_create_response.dart';
+export 'package:gym_api/src/model/member_display_status.dart';
 export 'package:gym_api/src/model/member_list_response.dart';
 export 'package:gym_api/src/model/member_response.dart';
 export 'package:gym_api/src/model/member_update_input.dart';

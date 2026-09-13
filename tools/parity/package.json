@@ -6,6 +6,7 @@
   "scripts": {
     "harness": "ts-node src/run.ts",
     "diff": "ts-node src/diff.ts",
+    "verify-display-status": "ts-node src/verifyDisplayStatus.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
