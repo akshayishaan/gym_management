@@ -44,6 +44,7 @@ String formatDate(String value) {
 /// The uppercased first letter of the first two whitespace-separated words of
 /// [name] (max two characters). Empty input yields an empty string.
 String getInitials(String name) {
+
   final List<String> words =
       name.split(RegExp(r'\s+')).where((String w) => w.isNotEmpty).toList();
   if (words.isEmpty) return '';
@@ -52,6 +53,59 @@ String getInitials(String name) {
     initials.write(word[0]);
   }
   return initials.toString().toUpperCase();
+}
+
+/// English month names for `1..12` (index `month - 1`). The app is
+/// English-only, so these are hardcoded rather than derived from `intl`'s
+/// locale (which is unset under `flutter test`).
+const List<String> kMonthNames = <String>[
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/// The long name for a `1..12` month number (e.g. `3` → `March`).
+String monthName(int month) => kMonthNames[month - 1];
+
+/// A human label for a `YYYY-MM` month key, matching the web payments page's
+/// `monthLabel`: `"2026-03"` → `"March 2026"`; empty/`null` → `"All months"`.
+String monthLabel(String? month) {
+  if (month == null || month.isEmpty) return 'All months';
+  final List<String> parts = month.split('-');
+  if (parts.length != 2) return 'All months';
+  final int? m = int.tryParse(parts[1]);
+  if (m == null || m < 1 || m > 12) return 'All months';
+  return '${kMonthNames[m - 1]} ${parts[0]}';
+}
+
+/// Capitalizes the first letter of each whitespace-separated word, mirroring
+/// CSS `text-transform: capitalize` (used by the web invoice's payment method).
+String capitalizeWords(String value) {
+  return value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((String w) => w.isNotEmpty)
+      .map((String w) => w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+}
+
+/// The device-local current month as a `YYYY-MM` key, used only as the default
+/// value for the Payments month filter (a form-input default, not a rendered
+/// business date — see ADR-0005).
+String currentMonthKey() {
+  final DateTime now = DateTime.now();
+  final String y = now.year.toString().padLeft(4, '0');
+  final String m = now.month.toString().padLeft(2, '0');
+  return '$y-$m';
 }
 
 /// An `sms:` deep link to [phone] with [message] pre-filled.

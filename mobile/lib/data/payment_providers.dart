@@ -36,3 +36,20 @@ final paymentsProvider = FutureProvider.autoDispose
   ref.read(scopeLastFetchProvider.notifier).touch(gymId);
   return result;
 });
+
+/// A single, full payment by id (used by the invoice screen).
+final paymentProvider = FutureProvider.autoDispose
+    .family<PaymentResponse, String>((ref, String paymentId) async {
+  ref.watch(appResumeTickProvider);
+  final String? gymId = ref.watch(selectedGymIdProvider);
+  if (gymId == null) throw StateError('No gym selected');
+
+  final dio = ref.watch(dioProvider);
+  final PaymentResponse result = await getJson<PaymentResponse>(
+    dio,
+    '/payments/$paymentId',
+    fromJson: PaymentResponse.fromJson,
+  );
+  ref.read(scopeLastFetchProvider.notifier).touch(gymId);
+  return result;
+});
