@@ -1,49 +1,30 @@
+// This is a basic Flutter widget test.
+//
+// To perform an interaction with a widget in your test, use the WidgetTester
+// utility in the flutter_test package. For example, you can send tap and scroll
+// gestures. You can also use WidgetTester to find child widgets in the widget
+// tree, read text, and verify that the values of widget properties are correct.
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gym_manager/app.dart';
-import 'package:gym_manager/core/api/dio_providers.dart';
-import 'package:gym_manager/core/auth/token_storage.dart';
 
-/// In-memory [TokenStorage] so the app can boot without the platform-secured
-/// storage plugin (which does not run under `flutter test`).
-class _FakeTokenStorage implements TokenStorage {
-  final Map<String, String> store = <String, String>{};
-
-  @override
-  Future<String?> readRefreshToken() async => store['refresh_token'];
-
-  @override
-  Future<void> writeRefreshToken(String token) async {
-    store['refresh_token'] = token;
-  }
-
-  @override
-  Future<void> clearRefreshToken() async {
-    store.remove('refresh_token');
-  }
-}
+import 'package:gym_manager/main.dart';
 
 void main() {
-  Widget buildHarness() {
-    return ProviderScope(
-      overrides: <Override>[
-        tokenManagerProvider.overrideWithValue(
-          TokenManager(_FakeTokenStorage()),
-        ),
-      ],
-      child: const GymManagerApp(),
-    );
-  }
+  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    // Build our app and trigger a frame.
+    await tester.pumpWidget(const MyApp());
 
-  testWidgets('boots unauthenticated into the login screen', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(buildHarness());
-    await tester.pumpAndSettle();
+    // Verify that our counter starts at 0.
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
 
-    expect(find.text('Sign in'), findsWidgets);
-    expect(find.text('Create account'), findsOneWidget);
-    expect(find.byType(TextFormField), findsNWidgets(2));
+    // Tap the '+' icon and trigger a frame.
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
+
+    // Verify that our counter has incremented.
+    expect(find.text('0'), findsNothing);
+    expect(find.text('1'), findsOneWidget);
   });
 }

@@ -1,5 +1,7 @@
 # Migration Plan: Next.js + Mongoose → NestJS + Flutter (MongoDB unchanged)
 
+> **Historical / superseded — 2026-10-04.** The proposal below is retained for its original rationale, not as the current implementation contract. The working tree now contains the standalone NestJS backend in `backend/` and a fresh Android/iOS Flutter starter in `mobile/`. Next.js and the prior Flutter implementation are retained in Git history, not as working-tree rollback sources. The new starter has no authentication, API client, gym screens, or backend integration; the Riverpod/Dio/generated-client stack and UI-parity work below are historical proposals, not present features. Docker/Oracle Cloud deployment and CI plans are aspirational, not supplied infrastructure, and backend behavioral parity/production readiness have not been established. Actual Nest routes have **no `/api` prefix**; Gym settings use `/gyms/:id`, not `/settings`. For current setup and conventions, read the root `README.md` and `CLAUDE.md`, then the controllers under `backend/src/`. The original body follows unchanged.
+
 ## Architecture at a glance
 
 ```

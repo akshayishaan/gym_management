@@ -19,10 +19,8 @@ This is a single-context repository:
 ├── CONTEXT.md
 ├── docs/
 │   └── adr/
-├── app/
-├── components/
-├── lib/
-└── models/
+├── backend/
+└── mobile/
 ```
 
 ## Use the glossary's vocabulary

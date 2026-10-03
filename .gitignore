@@ -8,3 +8,20 @@ dist/
 .kilo
 .vercel
 .env*
+!.env.example
+!**/.env.example
+
+# Local agent state; project skills remain committable.
+.omc/**
+!.omc/
+!.omc/skills/
+!.omc/skills/**
+.omo/
+
+# Generated Flutter output; native Android/iOS sources stay trackable.
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+/mobile/build/
+/mobile/coverage/
+*.tsbuildinfo
