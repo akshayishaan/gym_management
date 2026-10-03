@@ -28,24 +28,18 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: notifier,
     redirect: (context, state) {
       final rehydrated = ref.read(authRehydratedProvider);
-      if (!rehydrated) {
+      final auth = ref.read(authControllerProvider);
+      final loc = state.matchedLocation;
+if (!rehydrated) {
         // Don't redirect during the very first frame; let the splash show
         // until the controller finishes rehydrating tokens.
         return null;
       }
-      final auth = ref.read(authControllerProvider);
-      final loc = state.matchedLocation;
 
       // Stage-driven routing: each stage owns a set of allowed paths.
       const authOnlyPaths = {'/splash', '/login', '/signup'};
-      const gymGatePaths = {'/splash', '/login', '/signup', '/gym/new'};
-      const pickerPaths = {
-        '/splash',
-        '/login',
-        '/signup',
-        '/gym/new',
-        '/gym/picker',
-      };
+      const gymGatePaths = {'/splash', '/gym/new'};
+      const pickerPaths = {'/splash', '/gym/picker'};
 
       switch (auth.stage) {
         case AuthStage.unknown:
@@ -57,6 +51,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           return '/splash';
 
         case AuthStage.needsGymCreation:
+          // Allow only splash and gym creation. We deliberately do NOT
+          // allow /login or /signup once the user has a valid session —
+          // even one without gyms — otherwise a state change to
+          // needsGymCreation leaves them stuck on the login screen.
           if (gymGatePaths.contains(loc)) return null;
           return '/gym/new';
 
@@ -65,7 +63,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           return '/gym/picker';
 
         case AuthStage.authenticated:
-          // Logged-in users shouldn't sit on splash/login/signup.
+          // Logged-in users shouldn't sit on splash/login/signup or any
+          // gym-gate path.
           if (authOnlyPaths.contains(loc) ||
               loc == '/gym/new' ||
               loc == '/gym/picker') {
@@ -124,9 +123,11 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// subscribe to. The router re-runs its `redirect` whenever this notifies.
 class AuthRouterRefresh extends ChangeNotifier {
   AuthRouterRefresh(this._ref) {
-    _sub = _ref.listen<AuthState>(
+_sub = _ref.listen<AuthState>(
       authControllerProvider,
-      (_, _) => notifyListeners(),
+      (prev, next) {
+notifyListeners();
+      },
     );
   }
   final Ref _ref;
@@ -134,7 +135,7 @@ class AuthRouterRefresh extends ChangeNotifier {
 
   @override
   void dispose() {
-    _sub.close();
+_sub.close();
     super.dispose();
   }
 }

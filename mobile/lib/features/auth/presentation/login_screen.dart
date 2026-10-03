@@ -34,11 +34,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onSubmit() async {
-    if (_submitting) return;
+if (_submitting) return;
     final form = _formKey.currentState;
-    if (form == null || !form.validate()) return;
-
-    setState(() {
+if (form == null || !form.validate()) {
+return;
+    }
+setState(() {
       _submitting = true;
       _formError = null;
     });

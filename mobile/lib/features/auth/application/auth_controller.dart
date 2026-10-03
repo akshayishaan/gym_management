@@ -89,10 +89,11 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> signIn({required String email, required String password}) async {
-    final session = await _repo.signIn(email: email, password: password);
+final session = await _repo.signIn(email: email, password: password);
     await _persist(session);
-    state = AuthState(
-      stage: _stageFor(staff: session.staff, selectedGymId: null),
+    final nextStage = _stageFor(staff: session.staff, selectedGymId: null);
+state = AuthState(
+      stage: nextStage,
       staff: session.staff,
     );
     // If the user has exactly one gym, auto-select it.

@@ -11,19 +11,24 @@ class GymRepository {
   GymRepository(this._dio);
   final Dio _dio;
 
-  /// GET /gyms — lists the staff's accessible gyms. Returns the backend's
-  /// list payload. Shape: `{ items: Gym[], total, page, limit }` per
-  /// `backend/src/lib/utils.ts`.
+  /// GET /gyms — lists the staff's accessible gyms. The backend returns a
+  /// bare JSON array, not a paginated envelope, so we decode as a list.
   Future<List<Gym>> listGyms() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/gyms');
-      final data = res.data;
-      if (res.statusCode == 200 && data != null) {
-        final items = (data['items'] as List<dynamic>?) ??
-            (data is List ? data as List<dynamic> : null);
-        if (items != null) {
-          return items
-              .map((e) => Gym.fromJson(e as Map<String, dynamic>))
+      final res = await _dio.get<dynamic>('/gyms');
+      if (res.statusCode == 200 && res.data != null) {
+        final data = res.data;
+        if (data is List) {
+          return data
+              .whereType<Map<String, dynamic>>()
+              .map(Gym.fromJson)
+              .toList();
+        }
+        // Some NestJS controllers may wrap in { items: [...] }; tolerate.
+        if (data is Map && data['items'] is List) {
+          return (data['items'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(Gym.fromJson)
               .toList();
         }
       }
