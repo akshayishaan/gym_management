@@ -52,6 +52,13 @@ class SecureStore {
   Future<void> clearAll() async {
     await _storage.deleteAll();
   }
+
+  /// Removes just the selected-gym-id key (e.g. when the resolved gym has
+  /// been deleted server-side). Leaves the auth tokens and staff profile
+  /// untouched so the user stays signed in.
+  Future<void> clearSelectedGymIdFallback() async {
+    await _storage.delete(key: _kSelectedGymId);
+  }
 }
 
 /// Provider exposing the singleton [SecureStore] backed by the platform

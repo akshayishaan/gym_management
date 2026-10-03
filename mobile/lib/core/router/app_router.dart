@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +6,8 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/signup_screen.dart';
+import '../../features/gym/presentation/gym_create_screen.dart';
+import '../../features/gym/presentation/gym_picker_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/payments/presentation/payments_screen.dart';
@@ -34,27 +36,43 @@ final routerProvider = Provider<GoRouter>((ref) {
       final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;
 
-      // If we're already at /splash and we now know the user is authed,
-      // bounce them to the home shell.
-      if (loc == '/splash' && auth.stage == AuthStage.authenticated) {
-        return '/home';
-      }
+      // Stage-driven routing: each stage owns a set of allowed paths.
+      const authOnlyPaths = {'/splash', '/login', '/signup'};
+      const gymGatePaths = {'/splash', '/login', '/signup', '/gym/new'};
+      const pickerPaths = {
+        '/splash',
+        '/login',
+        '/signup',
+        '/gym/new',
+        '/gym/picker',
+      };
 
-      // Unauthenticated users can only see splash / login / signup.
-      if (auth.stage == AuthStage.unauthenticated) {
-        if (loc == '/splash' || loc == '/login' || loc == '/signup') {
+      switch (auth.stage) {
+        case AuthStage.unknown:
+          // Rehydration still in progress; only splash makes sense.
+          return loc == '/splash' ? null : '/splash';
+
+        case AuthStage.unauthenticated:
+          if (authOnlyPaths.contains(loc)) return null;
+          return '/splash';
+
+        case AuthStage.needsGymCreation:
+          if (gymGatePaths.contains(loc)) return null;
+          return '/gym/new';
+
+        case AuthStage.needsGymSelection:
+          if (pickerPaths.contains(loc)) return null;
+          return '/gym/picker';
+
+        case AuthStage.authenticated:
+          // Logged-in users shouldn't sit on splash/login/signup.
+          if (authOnlyPaths.contains(loc) ||
+              loc == '/gym/new' ||
+              loc == '/gym/picker') {
+            return '/home';
+          }
           return null;
-        }
-        return '/splash';
       }
-
-      // Authenticated users shouldn't see the splash or login screens.
-      if (auth.stage == AuthStage.authenticated) {
-        if (loc == '/splash' || loc == '/login' || loc == '/signup') {
-          return '/home';
-        }
-      }
-      return null;
     },
     routes: [
       GoRoute(
@@ -68,6 +86,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/signup',
         builder: (_, _) => const SignupScreen(),
+      ),
+      GoRoute(
+        path: '/gym/new',
+        builder: (_, _) => const GymCreateScreen(),
+      ),
+      GoRoute(
+        path: '/gym/picker',
+        builder: (_, _) => const GymPickerScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => RootShell(child: child),

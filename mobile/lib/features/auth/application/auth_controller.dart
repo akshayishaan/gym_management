@@ -6,7 +6,23 @@ import '../data/auth_repository.dart';
 import '../domain/staff.dart';
 
 /// Where the auth flow is currently. Drives the GoRouter redirect.
-enum AuthStage { unknown, unauthenticated, authenticated, needsGymSelection }
+enum AuthStage {
+  unknown,
+
+  /// No valid session — show splash/login.
+  unauthenticated,
+
+  /// Session exists; user has at least one gym AND we know which one is
+  /// selected (or only one gym exists and we auto-picked it).
+  authenticated,
+
+  /// Session exists but the user has no Gym yet. Route to gym creation.
+  needsGymCreation,
+
+  /// Session exists, user has 2+ gyms, but none is currently selected.
+  /// Route to the gym picker.
+  needsGymSelection,
+}
 
 @immutable
 class AuthState {
@@ -50,23 +66,39 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
     final staff = Staff.fromJson(staffJson);
+    final selectedGym = await _store.readSelectedGymId();
     state = AuthState(
-      stage: staff.gymIds.isEmpty
-          ? AuthStage.unauthenticated
-          : AuthStage.authenticated,
+      stage: _stageFor(staff: staff, selectedGymId: selectedGym),
       staff: staff,
     );
+  }
+
+  /// Pure stage-resolution helper. Centralized so the rules are easy to audit
+  /// and so the router's redirect can mirror them.
+  static AuthStage _stageFor({
+    required Staff staff,
+    required String? selectedGymId,
+  }) {
+    if (staff.gymIds.isEmpty) return AuthStage.needsGymCreation;
+    if (selectedGymId == null || !staff.gymIds.contains(selectedGymId)) {
+      return staff.gymIds.length == 1
+          ? AuthStage.authenticated // auto-pick the only gym below
+          : AuthStage.needsGymSelection;
+    }
+    return AuthStage.authenticated;
   }
 
   Future<void> signIn({required String email, required String password}) async {
     final session = await _repo.signIn(email: email, password: password);
     await _persist(session);
     state = AuthState(
-      stage: session.staff.gymIds.isEmpty
-          ? AuthStage.unauthenticated
-          : AuthStage.authenticated,
+      stage: _stageFor(staff: session.staff, selectedGymId: null),
       staff: session.staff,
     );
+    // If the user has exactly one gym, auto-select it.
+    if (session.staff.gymIds.length == 1) {
+      await onGymSelected(session.staff.gymIds.first);
+    }
   }
 
   Future<void> signUp({
@@ -78,9 +110,7 @@ class AuthController extends Notifier<AuthState> {
         await _repo.signUp(name: name, email: email, password: password);
     await _persist(session);
     state = AuthState(
-      stage: session.staff.gymIds.isEmpty
-          ? AuthStage.unauthenticated
-          : AuthStage.authenticated,
+      stage: _stageFor(staff: session.staff, selectedGymId: null),
       staff: session.staff,
     );
   }
@@ -115,6 +145,13 @@ class AuthController extends Notifier<AuthState> {
     await _store.writeStaff(updated.toJson());
     await _store.writeSelectedGymId(gymId);
     state = state.copyWith(staff: updated, stage: AuthStage.authenticated);
+  }
+
+  /// Called by the gym-creation flow after the backend returns a new gym.
+  /// Adds the id to the staff's gymIds, auto-selects it, and transitions to
+  /// the authenticated stage.
+  Future<void> onGymCreated(String gymId) async {
+    await onGymSelected(gymId);
   }
 }
 
