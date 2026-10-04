@@ -141,6 +141,7 @@ state = AuthState(
       id: staff.id,
       name: staff.name,
       email: staff.email,
+      role: staff.role,
       gymIds: updatedGyms,
     );
     await _store.writeStaff(updated.toJson());
