@@ -2,7 +2,7 @@
 // calendar header (month picker) + TOTAL COLLECTED KPI card + status pills
 // (All / Settled / Pending / Refunded) + "Recent Payments" list of
 // transaction cards (avatar, name + plan, amount + invoice, timestamp +
-// method chip, Void/Refund actions, optional Recurring chip).
+// method chip, Void/Refund actions).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -516,7 +516,7 @@ class _StatusPill extends StatelessWidget {
 }
 
 /// One transaction card: avatar + center column + right amount/invoice
-/// + timestamp/method row + Void/Refund actions + Recurring chip.
+/// + timestamp/method row + Void/Refund actions.
 class _PaymentCard extends StatelessWidget {
   const _PaymentCard({
     required this.payment,
@@ -529,9 +529,6 @@ class _PaymentCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onVoid;
   final VoidCallback onRefund;
-
-  bool get _isRecurring =>
-      payment.kind == 'plan_purchase' && payment.membershipStatus == 'active';
 
   String get _initials => _computeInitials(payment.memberName);
 
@@ -606,14 +603,10 @@ class _PaymentCard extends StatelessWidget {
                     ),
                 ],
               ),
-              if (_isRecurring) ...[
-                const SizedBox(width: LatoSpacing.sm),
-                const _RecurringChip(),
-              ],
             ],
           ),
           const SizedBox(height: LatoSpacing.md),
-          // Timestamp + method chip row
+          // Timestamp + method chip row.
           Row(
             children: [
               const Icon(
@@ -713,44 +706,6 @@ class _InitialsAvatar extends StatelessWidget {
           color: LatoColors.primary,
           fontWeight: FontWeight.w800,
         ),
-      ),
-    );
-  }
-}
-
-class _RecurringChip extends StatelessWidget {
-  const _RecurringChip();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: LatoSpacing.sm,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: LatoColors.primary.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: LatoColors.primary.withValues(alpha: 0.6)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.autorenew,
-            size: 12,
-            color: LatoColors.primary,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Recurring: Monthly',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: LatoColors.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
       ),
     );
   }
