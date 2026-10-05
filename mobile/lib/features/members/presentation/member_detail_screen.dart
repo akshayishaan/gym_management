@@ -5,9 +5,9 @@
 //   * member_detail_activity.png — History tab (plan history + Reverse Plan)
 //
 // Identity card, quick actions row, segmented tabs, and key/value rows all
-// come straight from those references. Edit launches Track B's
-// `MemberFormSheet` (currently add-only); Delete is a confirmation dialog
-// that calls `memberDeleteControllerProvider`.
+// come straight from those references. Edit launches `MemberFormSheet`
+// pre-filled via its `existingMember` param (PUT /members/:id); Delete is
+// a confirmation dialog that calls `memberDeleteControllerProvider`.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -44,10 +44,6 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
   _Tab _selectedTab = _Tab.overview;
 
   Future<void> _openEditSheet(Member member) async {
-    // TODO(phase 5 — Track B): Track B's `MemberFormSheet` is currently
-    // add-only; once it accepts an optional `Member` for edit, pass
-    // `existingMember: member` here. For now we open the sheet without
-    // pre-fill so the pencil button at least surfaces the screen.
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -59,7 +55,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
       ),
       builder: (_) => FractionallySizedBox(
         heightFactor: 0.92,
-        child: const MemberFormSheet(),
+        child: MemberFormSheet(existingMember: member),
       ),
     );
   }

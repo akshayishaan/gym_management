@@ -10,13 +10,22 @@ import '../../../design/components/lato_card.dart';
 import '../../../design/spacing.dart';
 import '../application/member_controller.dart';
 import '../data/member_repository.dart';
+import '../domain/member.dart';
 
-/// Add-member bottom sheet. Mirrors the Figma `members_directory_v2.png`
+/// Add/edit-member bottom sheet. Mirrors the Figma `members_directory_v2.png`
 /// sheet: drag handle, title + close, PERSONAL INFO section, MEMBERSHIP
-/// section (plan dropdown is disabled until the plans feature lands),
-/// full-width lime primary CTA.
+/// section, full-width lime primary CTA.
+///
+/// Pass [existingMember] to edit it in place (`PUT /members/:id`) — the
+/// form pre-fills from it and the Plan picker becomes a read-only display
+/// of the current plan, since plan changes go through the payment/renewal
+/// flow (`membershipLifecycle.ts`), not a raw member update. Leave it null
+/// to create a new member (`POST /members`), which is the only mode this
+/// sheet supported until now.
 class MemberFormSheet extends ConsumerStatefulWidget {
-  const MemberFormSheet({super.key});
+  const MemberFormSheet({super.key, this.existingMember});
+
+  final Member? existingMember;
 
   @override
   ConsumerState<MemberFormSheet> createState() => _MemberFormSheetState();
@@ -36,6 +45,25 @@ class _MemberFormSheetState extends ConsumerState<MemberFormSheet> {
   String? _selectedPlanName;
 
   bool _isSubmitting = false;
+
+  bool get _isEditing => widget.existingMember != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final member = widget.existingMember;
+    if (member == null) return;
+    _nameCtrl.text = member.name;
+    _phoneCtrl.text = member.phone;
+    _emailCtrl.text = member.email ?? '';
+    _addressCtrl.text = member.address ?? '';
+    _notesCtrl.text = member.notes ?? '';
+    _gender = member.gender;
+    _dateOfBirth = DateTime.tryParse(member.dateOfBirth ?? '');
+    // Display-only in edit mode (see class doc) — not sent on submit.
+    _selectedPlanId = member.planId;
+    _selectedPlanName = member.planName;
+  }
 
   @override
   void dispose() {
@@ -186,23 +214,40 @@ class _MemberFormSheetState extends ConsumerState<MemberFormSheet> {
 
     setState(() => _isSubmitting = true);
     try {
-      final controller = ref.read(memberCreateControllerProvider.notifier);
-      await controller.create(MemberCreateInput(
-        name: _nameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        email: _emailCtrl.text.trim(),
-        address: _addressCtrl.text.trim(),
-        dateOfBirth: _dateOfBirth == null
-            ? null
-            : _formatDate(_dateOfBirth!),
-        gender: _gender,
-        planId: _selectedPlanId,
-        notes: _notesCtrl.text.trim(),
-      ));
+      if (_isEditing) {
+        final controller = ref.read(memberUpdateControllerProvider.notifier);
+        await controller.update(
+          widget.existingMember!.id,
+          MemberUpdateInput(
+            name: _nameCtrl.text.trim(),
+            phone: _phoneCtrl.text.trim(),
+            email: _emailCtrl.text.trim(),
+            address: _addressCtrl.text.trim(),
+            dateOfBirth:
+                _dateOfBirth == null ? null : _formatDate(_dateOfBirth!),
+            gender: _gender,
+            notes: _notesCtrl.text.trim(),
+          ),
+        );
+      } else {
+        final controller = ref.read(memberCreateControllerProvider.notifier);
+        await controller.create(MemberCreateInput(
+          name: _nameCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          address: _addressCtrl.text.trim(),
+          dateOfBirth: _dateOfBirth == null
+              ? null
+              : _formatDate(_dateOfBirth!),
+          gender: _gender,
+          planId: _selectedPlanId,
+          notes: _notesCtrl.text.trim(),
+        ));
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Member added')),
+        SnackBar(content: Text(_isEditing ? 'Member updated' : 'Member added')),
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -252,7 +297,7 @@ class _MemberFormSheetState extends ConsumerState<MemberFormSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Add Member',
+                      _isEditing ? 'Edit Member' : 'Add Member',
                       style: theme.textTheme.headlineSmall,
                     ),
                   ),
@@ -391,17 +436,29 @@ class _MemberFormSheetState extends ConsumerState<MemberFormSheet> {
                       const SizedBox(height: LatoSpacing.xxl),
                       const _SectionLabel('MEMBERSHIP'),
                       const SizedBox(height: LatoSpacing.md),
-                      const _FieldLabel('Plan (Optional)'),
+                      _FieldLabel(_isEditing ? 'Current Plan' : 'Plan (Optional)'),
                       const SizedBox(height: LatoSpacing.sm),
-                      _PickerField(
-                        hint: 'No Plan',
-                        value: _selectedPlanName,
-                        icon: null,
-                        onTap: _pickPlan,
-                      ),
+                      if (_isEditing)
+                        // Plan changes go through Renew/Payment (a plan
+                        // purchase), not a raw member update — see
+                        // `membershipLifecycle.ts`. Show it, don't offer
+                        // to edit it here.
+                        _PickerField(
+                          hint: 'No Plan',
+                          value: _selectedPlanName,
+                          icon: Icons.lock_outline,
+                          onTap: () {},
+                        )
+                      else
+                        _PickerField(
+                          hint: 'No Plan',
+                          value: _selectedPlanName,
+                          icon: null,
+                          onTap: _pickPlan,
+                        ),
                       const SizedBox(height: LatoSpacing.huge),
                       LatoPrimaryButton(
-                        label: 'ADD MEMBER',
+                        label: _isEditing ? 'SAVE CHANGES' : 'ADD MEMBER',
                         loading: _isSubmitting,
                         onPressed: _isSubmitting ? null : _submit,
                       ),
