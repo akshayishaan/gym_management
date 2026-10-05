@@ -5,13 +5,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/contact_launcher.dart';
 import '../../../design/colors.dart';
 import '../../../design/components/lato_card.dart';
 import '../../../design/components/lato_empty_state.dart';
 import '../../../design/components/lato_error_state.dart';
 import '../../../design/components/lato_loading.dart';
 import '../../../design/components/lato_status_chip.dart';
+import '../../../design/spacing.dart';
 import '../../gym/application/active_gym_controller.dart';
+import '../../payments/presentation/payment_form_sheet.dart';
 import '../data/dashboard_repository.dart';
 import '../domain/dashboard_data.dart';
 
@@ -336,47 +339,7 @@ class _RevenueCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Lightweight sparkline placeholder. A real implementation
-          // would render the weekly breakdown returned by the backend.
-          _Sparkline(),
         ],
-      ),
-    );
-  }
-}
-
-class _Sparkline extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    // 4 bars; last 2 highlighted to suggest "current week".
-    const heights = [0.30, 0.42, 0.55, 0.85];
-    return SizedBox(
-      height: 56,
-      child: Row(
-        children: List.generate(4, (i) {
-          final highlighted = i >= 2;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: FractionallySizedBox(
-                  heightFactor: heights[i],
-                  widthFactor: 1.0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: highlighted
-                          ? LatoColors.primary
-                          : LatoColors.borderDark,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
       ),
     );
   }
@@ -498,6 +461,25 @@ class _KpiTile extends StatelessWidget {
   }
 }
 
+/// Opens the same [PaymentFormSheet] used by the Payments screen's "+"
+/// button, with no pre-selected member (the sheet's own member picker
+/// handles that). Shared by the "Record Pay" quick-op tile here.
+Future<void> _openRecordPaymentSheet(BuildContext context) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: LatoColors.surfaceDark,
+    useSafeArea: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
+    ),
+    builder: (sheetCtx) => const FractionallySizedBox(
+      heightFactor: 0.92,
+      child: PaymentFormSheet(),
+    ),
+  );
+}
+
 class _QuickOpsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -514,21 +496,26 @@ class _QuickOpsRow extends StatelessWidget {
           assetPath: 'assets/icons/quickop_record_pay.svg',
           label: 'Record\nPay',
           iconColor: LatoColors.primary, // lime
-          onTap: () => context.go('/payments'),
+          onTap: () => _openRecordPaymentSheet(context),
         ),
         const SizedBox(width: 12),
         _QuickOpTile(
           assetPath: 'assets/icons/quickop_reminders.svg',
           label: 'Send\nAlerts',
           iconColor: const Color(0xFF22D3EE), // cyan
-          onTap: () {},
+          // No bulk-notification endpoint exists yet (backend exposes no
+          // `/alerts` resource) — say so honestly rather than a silent
+          // no-op, matching the Plans screen's "Duplicate — coming soon".
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Send Alerts — coming soon')),
+          ),
         ),
         const SizedBox(width: 12),
         _QuickOpTile(
           assetPath: 'assets/icons/quickop_reports.svg',
           label: 'Reports',
           iconColor: const Color(0xFF60A5FA), // blue
-          onTap: () => context.go('/operations'),
+          onTap: () => context.go('/reports'),
         ),
       ],
     );
@@ -673,13 +660,27 @@ class _ExpiringRow extends StatelessWidget {
             _IconAction(
               icon: Icons.chat_bubble_outline,
               color: LatoColors.success,
-              onTap: () {},
+              onTap: () {
+                final phone = member.phone;
+                if (phone == null || phone.isEmpty) return;
+                final clean = phone.replaceAll(RegExp(r'\s+'), '');
+                final stripped =
+                    clean.startsWith('+') ? clean.substring(1) : clean;
+                launchContactUrl(context, 'https://wa.me/$stripped');
+              },
             ),
             const SizedBox(width: 4),
             _IconAction(
               icon: Icons.call_outlined,
               color: LatoColors.info,
-              onTap: () {},
+              onTap: () {
+                final phone = member.phone;
+                if (phone == null || phone.isEmpty) return;
+                launchContactUrl(
+                  context,
+                  'tel:${phone.replaceAll(RegExp(r'\s+'), '')}',
+                );
+              },
             ),
           ],
         ),

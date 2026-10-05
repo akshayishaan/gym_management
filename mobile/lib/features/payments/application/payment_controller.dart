@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../dashboard/data/dashboard_repository.dart';
 import '../../members/data/member_repository.dart';
+import '../../plans/data/plan_repository.dart';
 import '../data/payment_repository.dart';
 import '../domain/payment.dart';
 
@@ -47,6 +49,15 @@ class PaymentRecordController
       // purchase or dues) commits, so any visible member list rows need a
       // refresh. Invalidating without an argument clears all family instances.
       ref.invalidate(memberListProvider);
+      ref.invalidate(memberDetailProvider(input.memberId));
+      // Revenue totals, recent-payments feed, and (for a plan purchase)
+      // the expiring-soon list all shift with a new payment.
+      ref.invalidate(dashboardProvider);
+      // A plan purchase moves that plan's activeMembers/salesYtd/revenue
+      // stats shown on the Plans list cards.
+      if (input.planId != null) {
+        ref.invalidate(planListProvider);
+      }
       state = const PaymentMutationState();
       return payment;
     } catch (e) {

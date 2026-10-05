@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/api/dio_client.dart';
+import '../../../core/utils/contact_launcher.dart';
 import '../../../design/colors.dart';
 import '../../../design/components/lato_card.dart';
 import '../../../design/components/lato_empty_state.dart';
@@ -21,6 +22,7 @@ import '../../../design/components/lato_error_state.dart';
 import '../../../design/components/lato_loading.dart';
 import '../../../design/components/lato_status_chip.dart';
 import '../../../design/spacing.dart';
+import '../../payments/presentation/payment_form_sheet.dart';
 import '../application/member_controller.dart';
 import '../data/member_repository.dart';
 import '../domain/member.dart';
@@ -402,15 +404,20 @@ class _QuickActionsRow extends StatelessWidget {
   const _QuickActionsRow({required this.member});
   final Member member;
 
-  void _launchUrl(BuildContext context, String url) {
-    // The backend exposes no contact APIs yet so these shortcuts are
-    // visible shortcuts that hand off to the platform handlers.
-    // Intentional no-op for now (placeholder for Phase 6+).
-    if (url.isEmpty) return;
-    // We can't depend on `url_launcher` here without modifying pubspec;
-    // leaving a no-op so the tiles render but don't crash.
-    // ignore: avoid_print
-    print('quick-action: $url');
+  Future<void> _openPaymentSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: LatoColors.surfaceDark,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
+      ),
+      builder: (sheetCtx) => FractionallySizedBox(
+        heightFactor: 0.92,
+        child: PaymentFormSheet(member: member),
+      ),
+    );
   }
 
   @override
@@ -423,8 +430,10 @@ class _QuickActionsRow extends StatelessWidget {
             icon: Icons.chat_bubble_outline,
             tint: LatoColors.primary,
             label: 'WhatsApp',
-            onTap: () =>
-                _launchUrl(context, 'https://wa.me/${_stripPlus(cleanPhone)}'),
+            onTap: () => launchContactUrl(
+              context,
+              'https://wa.me/${_stripPlus(cleanPhone)}',
+            ),
           ),
         ),
         const SizedBox(width: LatoSpacing.md),
@@ -433,7 +442,7 @@ class _QuickActionsRow extends StatelessWidget {
             icon: Icons.message_outlined,
             tint: LatoColors.info,
             label: 'SMS',
-            onTap: () => _launchUrl(context, 'sms:$cleanPhone'),
+            onTap: () => launchContactUrl(context, 'sms:$cleanPhone'),
           ),
         ),
         const SizedBox(width: LatoSpacing.md),
@@ -442,7 +451,11 @@ class _QuickActionsRow extends StatelessWidget {
             icon: Icons.autorenew,
             tint: LatoColors.primary,
             label: 'Renew',
-            onTap: () {},
+            // A "renewal" is a plan-purchase payment: picking a plan in
+            // the sheet creates a new Membership period for this member
+            // (see `membershipLifecycle.ts`). Same sheet as "Payment"
+            // below — the member just needs to pick a plan this time.
+            onTap: () => _openPaymentSheet(context),
           ),
         ),
         const SizedBox(width: LatoSpacing.md),
@@ -451,7 +464,7 @@ class _QuickActionsRow extends StatelessWidget {
             icon: Icons.credit_card_outlined,
             tint: LatoColors.primary,
             label: 'Payment',
-            onTap: () {},
+            onTap: () => _openPaymentSheet(context),
           ),
         ),
       ],

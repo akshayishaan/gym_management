@@ -20,6 +20,7 @@ import '../application/payment_controller.dart';
 import '../data/payment_repository.dart';
 import '../domain/payment.dart';
 import '../domain/payment_query.dart';
+import 'payment_form_sheet.dart';
 
 class PaymentsScreen extends ConsumerStatefulWidget {
   const PaymentsScreen({super.key});
@@ -37,6 +38,22 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   /// `Payment.status` value for client-side filtering (the list endpoint
   /// does not yet accept a status query param).
   String _activeStatus = 'all'; // 'all' | 'paid' | 'pending' | 'voided' | 'refunded'
+
+  Future<void> _openRecordPaymentSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: LatoColors.surfaceDark,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
+      ),
+      builder: (sheetCtx) => const FractionallySizedBox(
+        heightFactor: 0.92,
+        child: PaymentFormSheet(),
+      ),
+    );
+  }
 
   Future<void> _pickMonth() async {
     final now = DateTime.now();
@@ -194,6 +211,12 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
           'Payments & Ledger',
           style: theme.textTheme.headlineSmall,
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: _RecordPaymentPillButton(onTap: _openRecordPaymentSheet),
+          ),
+        ],
       ),
       body: async.when(
         loading: () => const LatoLoading(),
@@ -328,6 +351,31 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
 }
 
 /// Calendar-icon + month label + chevron. Tapping opens the month picker.
+/// Lime "+" pill in the AppBar that opens [PaymentFormSheet]. Mirrors
+/// `plans_list_screen.dart`'s `_NewPlanPillButton` so the add-entry
+/// affordance looks the same across the two ledger-style screens.
+class _RecordPaymentPillButton extends StatelessWidget {
+  const _RecordPaymentPillButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: LatoColors.primary,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(Icons.add, color: LatoColors.bgDark, size: 24),
+        ),
+      ),
+    );
+  }
+}
+
 class _MonthPickerBar extends StatelessWidget {
   const _MonthPickerBar({required this.label, required this.onTap});
   final String label;
