@@ -14,6 +14,7 @@ import '../../features/members/presentation/members_list_screen.dart';
 import '../../features/payments/presentation/payment_invoice_screen.dart';
 import '../../features/payments/presentation/payments_screen.dart';
 import '../../features/plans/presentation/plan_detail_screen.dart';
+import '../../features/plans/presentation/plans_list_screen.dart';
 import '../../features/more/presentation/more_screen.dart';
 import '../../features/more/presentation/root_shell.dart';
 import '../../features/activity/presentation/activity_log_screen.dart';
@@ -143,6 +144,15 @@ if (!rehydrated) {
             path: '/payments/:id',
             builder: (_, state) =>
                 PaymentInvoiceScreen(id: state.pathParameters['id']!),
+          ),
+          // /plans — Membership Plans list. Was previously unreachable:
+          // the More menu's "Plans" row pointed at '/operations' (a
+          // self-loop back to the menu it was opened from) because this
+          // route didn't exist yet. The screen itself (PlansListScreen)
+          // has existed and been backend-wired since Phase 6.
+          GoRoute(
+            path: '/plans',
+            builder: (_, _) => const PlansListScreen(),
           ),
           // /plans/:id — tapping a plan card opens this detail screen.
           // Stays inside the ShellRoute so the bottom nav remains

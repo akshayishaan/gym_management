@@ -762,6 +762,7 @@ class _PlanCard extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -881,7 +882,6 @@ class _SmallActionButton extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
-    ),
     );
   }
 }

@@ -612,6 +612,7 @@ class _PaymentCard extends StatelessWidget {
           ],
         ],
       ),
+      ),
     );
   }
 
@@ -703,7 +704,6 @@ class _RecurringChip extends StatelessWidget {
           ),
         ],
       ),
-    ),
     );
   }
 }

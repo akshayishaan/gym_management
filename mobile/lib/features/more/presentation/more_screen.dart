@@ -50,7 +50,7 @@ class MoreScreen extends ConsumerWidget {
                 icon: Icons.workspace_premium_outlined,
                 title: 'Plans',
                 subtitle: 'Membership tiers, pricing & billing cycles',
-                route: '/operations',
+                route: '/plans',
               ),
               _NavRow(
                 icon: Icons.bar_chart_outlined,

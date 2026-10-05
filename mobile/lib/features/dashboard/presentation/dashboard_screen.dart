@@ -818,7 +818,6 @@ class _RecentPaymentRow extends StatelessWidget {
   }
 }
 
-class _RepiXLogo extends StatelessWidget {
 /// SVG (1033×341 viewBox; the full mark with the neon chartreuse X is one
 /// cohesive path, so we render it as a single SvgPicture).
 class _RepiXLogo extends StatelessWidget {
