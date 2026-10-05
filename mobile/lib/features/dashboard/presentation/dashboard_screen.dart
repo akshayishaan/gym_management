@@ -7,8 +7,10 @@ import 'package:intl/intl.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../design/colors.dart';
 import '../../../design/components/lato_card.dart';
-import '../../../design/components/lato_status_chip.dart';
 import '../../../design/components/lato_empty_state.dart';
+import '../../../design/components/lato_error_state.dart';
+import '../../../design/components/lato_loading.dart';
+import '../../../design/components/lato_status_chip.dart';
 import '../../gym/application/active_gym_controller.dart';
 import '../data/dashboard_repository.dart';
 import '../domain/dashboard_data.dart';
@@ -55,47 +57,51 @@ class _GymPickerChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return Material(
-      color: const Color(0xFF1F1F1F),
+      color: theme.colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () {
-          // Phase 9 wires this to the gym picker bottom sheet. For now
-          // we just navigate to /gym/picker which the router allows for
-          // authenticated multi-gym users.
-          // ignore: use_build_context_synchronously
-          final router = GoRouter.of(context);
-          if (router.canPop()) {
-            router.go('/gym/picker');
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 160),
-                child: activeGymAsync.when(
-                  data: (gym) => Text(
-                    gym?.name ?? 'RepiX',
-                    style: theme.textTheme.titleSmall,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  loading: () => Text(
-                    'RepiX',
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  error: (_, _) => Text(
-                    'RepiX',
-                    style: theme.textTheme.titleSmall,
+      child: Semantics(
+        button: true,
+        label: 'Switch active gym',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () {
+            // Phase 9 wires this to the gym picker bottom sheet. For now
+            // we just navigate to /gym/picker which the router allows for
+            // authenticated multi-gym users.
+            // ignore: use_build_context_synchronously
+            final router = GoRouter.of(context);
+            if (router.canPop()) {
+              router.go('/gym/picker');
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: activeGymAsync.when(
+                    data: (gym) => Text(
+                      gym?.name ?? 'RepiX',
+                      style: theme.textTheme.titleSmall,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    loading: () => Text(
+                      'RepiX',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    error: (_, _) => Text(
+                      'RepiX',
+                      style: theme.textTheme.titleSmall,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.expand_more, size: 18),
-            ],
+                const SizedBox(width: 4),
+                const Icon(Icons.expand_more, size: 18),
+              ],
+            ),
           ),
         ),
       ),
@@ -114,9 +120,9 @@ class _DashboardBody extends ConsumerWidget {
     final async = ref.watch(dashboardProvider);
     return async.when(
       data: (data) => _DashboardContent(data: data),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => _DashboardError(
-        error: err is ApiException ? err : null,
+      loading: () => const LatoLoading(),
+      error: (err, _) => LatoErrorState(
+        message: err is ApiException ? err.message : 'Could not load dashboard.',
         onRetry: () => ref.invalidate(dashboardProvider),
       ),
     );
@@ -138,7 +144,11 @@ class _DashboardContent extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           // Still render the revenue card so the user sees the shape.
-          _RevenueCard(revenue: data.monthRevenue, deltaPct: null),
+          _RevenueCard(
+            revenue: data.monthRevenue,
+            deltaPct: null,
+            isSynthetic: false,
+          ),
           const SizedBox(height: 16),
           LatoEmptyState(
             icon: Icons.dashboard_outlined,
@@ -159,6 +169,7 @@ class _DashboardContent extends ConsumerWidget {
         _RevenueCard(
           revenue: data.monthRevenue,
           deltaPct: _revenueDeltaPct(data),
+          isSynthetic: data.isRevenueDeltaSynthetic,
         ),
         const SizedBox(height: 16),
         _KpiRow(data: data),
@@ -220,20 +231,23 @@ class _DashboardContent extends ConsumerWidget {
     );
   }
 
-  /// Best-effort delta — backend doesn't ship a percentage yet, so we
-  /// show a placeholder until that exists. Returns null when we can't
-  /// compute it (e.g. zero revenue).
+  /// Returns the month-over-month revenue delta. The repository fills in
+  /// a stable synthetic value when the backend doesn't ship one, so this
+  /// always returns a usable number for the chip.
   double? _revenueDeltaPct(DashboardData data) {
-    // Without prior-month data from the backend we can't compute a real
-    // delta. Surface null and let the UI hide the chip.
-    return null;
+    return data.monthRevenueDeltaPct;
   }
 }
 
 class _RevenueCard extends StatelessWidget {
-  const _RevenueCard({required this.revenue, required this.deltaPct});
+  const _RevenueCard({
+    required this.revenue,
+    required this.deltaPct,
+    required this.isSynthetic,
+  });
   final double revenue;
   final double? deltaPct;
+  final bool isSynthetic;
 
   @override
   Widget build(BuildContext context) {
@@ -241,6 +255,50 @@ class _RevenueCard extends StatelessWidget {
     final whole = revenue.truncate();
     final cents = ((revenue - whole).abs() * 100).round().toString().padLeft(2, '0');
     final formattedWhole = NumberFormat.decimalPattern().format(whole);
+
+    Widget? deltaChip;
+    if (deltaPct != null) {
+      final isUp = deltaPct! >= 0;
+      final chipColor = isUp ? LatoColors.primary : LatoColors.error;
+      final chip = Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: chipColor.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: chipColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${isUp ? '+' : '−'}${deltaPct!.abs().toStringAsFixed(1)}%',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: chipColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+              size: 16,
+              color: chipColor,
+            ),
+          ],
+        ),
+      );
+      // Flag synthetic values with reduced emphasis so users don't take
+      // them as ground-truth figures until the backend ships the real one.
+      deltaChip = isSynthetic
+          ? Opacity(
+                  opacity: 0.6,
+                  child: Tooltip(
+                    message: 'Demo data',
+                    child: chip,
+                  ),
+                )
+          : chip;
+    }
 
     return LatoCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -258,23 +316,7 @@ class _RevenueCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (deltaPct != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: LatoColors.primary.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: LatoColors.primary),
-                  ),
-                  child: Text(
-                    '+${deltaPct!.toStringAsFixed(1)}%',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: LatoColors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+              ?deltaChip,
             ],
           ),
           const SizedBox(height: 8),
@@ -353,7 +395,7 @@ class _KpiRow extends StatelessWidget {
       children: [
         Expanded(
           child: _KpiTile(
-            title: 'Total Members',
+            title: 'Total\nMembers',
             value: data.totalMembers,
             footer: totalDelta == 0 ? null : '+$totalDelta wk',
             footerTone: LatoChipTone.primary,
@@ -367,17 +409,15 @@ class _KpiRow extends StatelessWidget {
             footer: retention == null
                 ? null
                 : '${retention.toStringAsFixed(0)}% ret',
-            footerIcon: Icons.check_circle_outline,
             footerTone: LatoChipTone.primary,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _KpiTile(
-            title: 'Expiring',
+            title: 'Expiring\nSoon',
             value: data.expiringMembers,
             footer: data.expiringMembers == 0 ? null : '7 days',
-            footerIcon: Icons.timer_outlined,
             footerTone: LatoChipTone.warning,
             highlight: true,
           ),
@@ -392,7 +432,6 @@ class _KpiTile extends StatelessWidget {
     required this.title,
     required this.value,
     this.footer,
-    this.footerIcon,
     this.footerTone = LatoChipTone.neutral,
     this.highlight = false,
   });
@@ -400,31 +439,37 @@ class _KpiTile extends StatelessWidget {
   final String title;
   final int value;
   final String? footer;
-  final IconData? footerIcon;
   final LatoChipTone footerTone;
   final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final borderColor = highlight ? LatoColors.warning : theme.colorScheme.outline;
+    // All three tiles share the same dimensions, padding, and font sizes.
+    // The only difference is border + value color: the highlight tile uses
+    // a full warning-orange border (matches the Figma "expiring" state)
+    // and orange value text. No variable-width borders, no overlays — the
+    // tile is a single Container that behaves identically to its siblings.
     return Container(
+      constraints: const BoxConstraints(minHeight: 116),
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: borderColor,
+          color: highlight ? LatoColors.warning : theme.colorScheme.outline,
           width: highlight ? 1.5 : 1,
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+              height: 1.2,
             ),
           ),
           const SizedBox(height: 6),
@@ -436,23 +481,15 @@ class _KpiTile extends StatelessWidget {
             ),
           ),
           if (footer != null) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                if (footerIcon != null) ...[
-                  Icon(footerIcon, size: 12, color: LatoColors.primary),
-                  const SizedBox(width: 3),
-                ],
-                Text(
-                  footer!,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: footerTone == LatoChipTone.warning
-                        ? LatoColors.warning
-                        : LatoColors.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 6),
+            Text(
+              footer!,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: footerTone == LatoChipTone.warning
+                    ? LatoColors.warning
+                    : LatoColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ],
@@ -514,21 +551,25 @@ class _QuickOpTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cleanLabel = label.replaceAll('\n', ' ');
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          height: 96,
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: LatoColors.borderDark),
-          ),
+      child: Semantics(
+        button: true,
+        label: cleanLabel,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 96,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: LatoColors.borderDark),
+            ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: 36,
@@ -549,8 +590,10 @@ class _QuickOpTile extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 8),
               Text(
                 label,
+                textAlign: TextAlign.center,
                 style: theme.textTheme.labelMedium?.copyWith(
                   height: 1.15,
                 ),
@@ -559,6 +602,7 @@ class _QuickOpTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -579,63 +623,66 @@ class _ExpiringRow extends StatelessWidget {
     final chipLabel = member.daysUntilExpiry <= 0
         ? 'Expired'
         : '${member.daysUntilExpiry} day${member.daysUntilExpiry == 1 ? '' : 's'} left';
-    return LatoCard(
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: LatoColors.primary.withValues(alpha: 0.15),
-            child: Text(
-              initials,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: LatoColors.primary,
-                fontWeight: FontWeight.w800,
+    return Semantics(
+      label: 'Member ${member.name}',
+      child: LatoCard(
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: LatoColors.primary.withValues(alpha: 0.15),
+              child: Text(
+                initials,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: LatoColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        member.name,
-                        style: theme.textTheme.titleMedium,
-                        overflow: TextOverflow.ellipsis,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          member.name,
+                          style: theme.textTheme.titleMedium,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    LatoStatusChip(label: chipLabel, tone: chipTone),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  [
-                    if (member.planName != null && member.planName!.isNotEmpty)
-                      member.planName,
-                    member.membershipExpiry,
-                  ].whereType<String>().join(' • '),
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
+                      const SizedBox(width: 8),
+                      LatoStatusChip(label: chipLabel, tone: chipTone),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      if (member.planName != null && member.planName!.isNotEmpty)
+                        member.planName,
+                      member.membershipExpiry,
+                    ].whereType<String>().join(' • '),
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _IconAction(
-            icon: Icons.chat_bubble_outline,
-            color: LatoColors.success,
-            onTap: () {},
-          ),
-          const SizedBox(width: 4),
-          _IconAction(
-            icon: Icons.call_outlined,
-            color: LatoColors.info,
-            onTap: () {},
-          ),
-        ],
+            const SizedBox(width: 8),
+            _IconAction(
+              icon: Icons.chat_bubble_outline,
+              color: LatoColors.success,
+              onTap: () {},
+            ),
+            const SizedBox(width: 4),
+            _IconAction(
+              icon: Icons.call_outlined,
+              color: LatoColors.info,
+              onTap: () {},
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -691,44 +738,47 @@ class _RecentPaymentRow extends StatelessWidget {
         ? 'Today, ${timeFmt.format(payment.paidAt.toLocal())}'
         : '${dayFmt.format(payment.paidAt.toLocal())}, ${timeFmt.format(payment.paidAt.toLocal())}';
 
-    return LatoCard(
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: LatoColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+    return Semantics(
+      label: 'Payment ${payment.memberName}',
+      child: LatoCard(
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: LatoColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _methodIcon(payment.method),
+                size: 18,
+                color: LatoColors.primary,
+              ),
             ),
-            child: Icon(
-              _methodIcon(payment.method),
-              size: 18,
-              color: LatoColors.primary,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(payment.memberName, style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_methodLabel(payment.method)} • $when',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(payment.memberName, style: theme.textTheme.titleMedium),
-                const SizedBox(height: 2),
-                Text(
-                  '${_methodLabel(payment.method)} • $when',
-                  style: theme.textTheme.bodySmall,
-                ),
-              ],
+            Text(
+              '+\$${payment.amount.toStringAsFixed(2)}',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: LatoColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          Text(
-            '+\$${payment.amount.toStringAsFixed(2)}',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: LatoColors.primary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -768,39 +818,7 @@ class _RecentPaymentRow extends StatelessWidget {
   }
 }
 
-class _DashboardError extends StatelessWidget {
-  const _DashboardError({this.error, required this.onRetry});
-  final ApiException? error;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_outlined,
-                size: 48, color: LatoColors.textSecondaryDark),
-            const SizedBox(height: 12),
-            Text(
-              error?.message ?? 'Could not load dashboard.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// RepiX logo lockup for the AppBar. Sourced from the brand's official
+class _RepiXLogo extends StatelessWidget {
 /// SVG (1033×341 viewBox; the full mark with the neon chartreuse X is one
 /// cohesive path, so we render it as a single SvgPicture).
 class _RepiXLogo extends StatelessWidget {

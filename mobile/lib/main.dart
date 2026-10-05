@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'design/theme.dart';
+import 'features/settings/application/theme_controller.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +25,7 @@ class RepiXApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'RepiX',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.dark,
+      themeMode: ref.watch(materialThemeModeProvider),
       theme: LatoTheme.light(),
       darkTheme: LatoTheme.dark(),
       routerConfig: router,

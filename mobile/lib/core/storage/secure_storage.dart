@@ -18,6 +18,7 @@ class SecureStore {
   static const _kRefreshToken = 'refreshToken';
   static const _kStaffJson = 'staff';
   static const _kSelectedGymId = 'selectedGymId';
+  static const _kThemeMode = 'theme_mode';
 
   Future<void> writeTokens({
     required String accessToken,
@@ -48,6 +49,12 @@ class SecureStore {
 
   Future<String?> readSelectedGymId() =>
       _storage.read(key: _kSelectedGymId);
+
+  Future<void> writeThemeMode(String mode) =>
+      _storage.write(key: _kThemeMode, value: mode);
+
+  Future<String?> readThemeMode() =>
+      _storage.read(key: _kThemeMode);
 
   Future<void> clearAll() async {
     await _storage.deleteAll();

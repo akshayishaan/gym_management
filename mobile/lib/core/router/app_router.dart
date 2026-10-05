@@ -9,10 +9,16 @@ import '../../features/auth/presentation/signup_screen.dart';
 import '../../features/gym/presentation/gym_create_screen.dart';
 import '../../features/gym/presentation/gym_picker_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/members/presentation/member_detail_screen.dart';
 import '../../features/members/presentation/members_list_screen.dart';
+import '../../features/payments/presentation/payment_invoice_screen.dart';
 import '../../features/payments/presentation/payments_screen.dart';
-import '../../features/more/presentation/operations_screen.dart';
+import '../../features/plans/presentation/plan_detail_screen.dart';
+import '../../features/more/presentation/more_screen.dart';
 import '../../features/more/presentation/root_shell.dart';
+import '../../features/activity/presentation/activity_log_screen.dart';
+import '../../features/reports/presentation/reports_screen.dart';
+import '../../features/settings/presentation/settings_screen.dart';
 
 /// Single source of truth for navigation. Phases 3+ add their own routes
 /// (gym picker, member detail, etc.) on top of this.
@@ -105,13 +111,66 @@ if (!rehydrated) {
             path: '/members',
             builder: (_, _) => const MembersListScreen(),
           ),
+          // /members/:id is intentionally inside the ShellRoute so the
+          // bottom nav stays visible (matches the Figma detail design).
+          GoRoute(
+            path: '/members/:id',
+            builder: (_, state) =>
+                MemberDetailScreen(id: state.pathParameters['id']!),
+          ),
+          // The "add member" entry point is NOT a separate route — the
+          // list screen opens it via showModalBottomSheet (full-height
+          // form sheet from Figma). Keeping it modal avoids another nav
+          // stack push and matches the design.
           GoRoute(
             path: '/payments',
             builder: (_, _) => const PaymentsScreen(),
           ),
+          // Phase 9 renamed the route handler from `OperationsScreen`
+          // (a Phase 6 stub that just hosted the plans list) to the
+          // `MoreScreen` menu. The bottom-nav "Operations" tab still
+          // opens this route; Plans, Reports, Activity, and My Gyms are
+          // now listed as navigation rows inside the menu rather than
+          // as sibling top-level routes.
           GoRoute(
             path: '/operations',
-            builder: (_, _) => const OperationsScreen(),
+            builder: (_, _) => const MoreScreen(),
+          ),
+          // /payments/:id — invoice detail. Stays inside the ShellRoute
+          // so the bottom nav stays visible. Track B's screen replaces
+          // the stub `PaymentInvoiceScreen` wholesale.
+          GoRoute(
+            path: '/payments/:id',
+            builder: (_, state) =>
+                PaymentInvoiceScreen(id: state.pathParameters['id']!),
+          ),
+          // /plans/:id — tapping a plan card opens this detail screen.
+          // Stays inside the ShellRoute so the bottom nav remains
+          // visible (matches the Figma detail view).
+          GoRoute(
+            path: '/plans/:id',
+            builder: (_, state) =>
+                PlanDetailScreen(id: state.pathParameters['id']!),
+          ),
+          // /activity — Phase 8 Track B fills this in. Inside the
+          // ShellRoute so the bottom nav stays visible (matches the
+          // Figma detail-style activity feed).
+          GoRoute(
+            path: '/activity',
+            builder: (_, _) => const ActivityLogScreen(),
+          ),
+          // /reports — Phase 8 Track C fills this in. Inside the
+          // ShellRoute so the bottom nav stays visible.
+          GoRoute(
+            path: '/reports',
+            builder: (_, _) => const ReportsScreen(),
+          ),
+          // /settings — Phase 9 Track A placeholder. Inside the
+          // ShellRoute so the bottom nav stays visible. Track B
+          // replaces this stub with the real settings surface.
+          GoRoute(
+            path: '/settings',
+            builder: (_, _) => const SettingsScreen(),
           ),
         ],
       ),

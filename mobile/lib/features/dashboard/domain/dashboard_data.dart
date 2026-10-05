@@ -9,6 +9,8 @@ class DashboardData {
     required this.monthRevenue,
     required this.recentPayments,
     required this.expiringList,
+    this.monthRevenueDeltaPct,
+    this.isRevenueDeltaSynthetic = false,
   });
 
   /// Total members with `isActive != false` (legacy docs count too).
@@ -33,6 +35,18 @@ class DashboardData {
   /// nearest expiry. Each entry carries the days-until-expiry.
   final List<ExpiringMember> expiringList;
 
+  /// Month-over-month revenue delta as a percentage (e.g. `12.4` means
+  /// +12.4% vs the previous month). The backend doesn't ship this value
+  /// yet, so the repository derives a stable synthetic value from the
+  /// current month's revenue and marks it with [isRevenueDeltaSynthetic]
+  /// so the UI can flag it as "Demo data".
+  final double? monthRevenueDeltaPct;
+
+  /// True when [monthRevenueDeltaPct] was synthesized client-side rather
+  /// than returned by the backend. The UI should render the chip at a
+  /// reduced opacity with a "Demo data" tooltip in that case.
+  final bool isRevenueDeltaSynthetic;
+
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
       totalMembers: (json['totalMembers'] as num?)?.toInt() ?? 0,
@@ -48,6 +62,10 @@ class DashboardData {
           .whereType<Map<String, dynamic>>()
           .map(ExpiringMember.fromJson)
           .toList(),
+      monthRevenueDeltaPct:
+          (json['monthRevenueDeltaPct'] as num?)?.toDouble(),
+      isRevenueDeltaSynthetic:
+          json['isRevenueDeltaSynthetic'] as bool? ?? false,
     );
   }
 }
