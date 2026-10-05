@@ -19,6 +19,7 @@ class PaymentCreateInput {
     required this.method,
     this.planId,
     this.membershipStart,
+    this.reference,
     this.notes,
     String? requestId,
   }) : requestId = requestId ?? const Uuid().v4();
@@ -32,6 +33,10 @@ class PaymentCreateInput {
   final double amount;
   final String method; // 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'
   final String? membershipStart; // YYYY-MM-DD
+
+  /// Optional staff-entered reference (UPI transaction ID, card auth code,
+  /// cheque number, etc.) shown on the invoice when provided.
+  final String? reference;
   final String? notes;
 
   Map<String, dynamic> toJson() => {
@@ -42,6 +47,7 @@ class PaymentCreateInput {
         'method': method,
         if (membershipStart != null && membershipStart!.isNotEmpty)
           'membershipStart': membershipStart,
+        if (reference != null && reference!.isNotEmpty) 'reference': reference,
         if (notes != null && notes!.isNotEmpty) 'notes': notes,
       };
 }

@@ -56,6 +56,7 @@ interface RecordPaymentInput extends MutationContext {
   amount: number;
   method: PaymentMethod;
   membershipStart?: string;
+  reference?: string;
   notes?: string;
 }
 
@@ -168,6 +169,7 @@ async function createPlanPurchase(
     amount: number;
     method: PaymentMethod;
     membershipStart?: string;
+    reference?: string;
     notes?: string;
     actor: Actor;
     now: Date;
@@ -212,11 +214,14 @@ async function createPlanPurchase(
       memberName: input.member.name,
       planId: plan._id,
       planName: plan.name,
+      planFeatures: plan.features,
+      planDurationDays: plan.durationDays,
       amount: input.amount,
       kind: "plan_purchase",
       method: input.method,
       status: "paid",
       invoiceNumber,
+      reference: input.reference,
       notes: input.notes,
       paidAt: input.now,
       createdBy: input.actor.id,
@@ -309,6 +314,7 @@ export async function recordPayment(input: RecordPaymentInput): Promise<Lifecycl
         amount: input.amount,
         method: input.method,
         membershipStart: input.membershipStart,
+        reference: input.reference,
         notes: input.notes,
         actor: input.actor,
         now: input.now,
@@ -332,6 +338,7 @@ export async function recordPayment(input: RecordPaymentInput): Promise<Lifecycl
         method: input.method,
         status: "paid",
         invoiceNumber,
+        reference: input.reference,
         notes: input.notes,
         paidAt: input.now,
         createdBy: input.actor.id,

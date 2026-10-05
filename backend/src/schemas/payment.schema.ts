@@ -6,11 +6,22 @@ export interface IPayment extends Document {
   memberName: string;
   planId?: mongoose.Types.ObjectId;
   planName?: string;
+  /** Snapshot of the Plan's `features` at purchase time (plan_purchase only),
+   *  so an invoice keeps showing what the member actually got even if the
+   *  Plan's features are edited or removed later. */
+  planFeatures?: string[];
+  /** Snapshot of the Plan's `durationDays` at purchase time (plan_purchase
+   *  only), so the invoice's billing-cycle label is always real. */
+  planDurationDays?: number;
   amount: number;
   kind: "plan_purchase" | "dues";
   method: "cash" | "card" | "upi" | "bank_transfer" | "other";
   status: "paid" | "voided" | "refunded";
   invoiceNumber: string;
+  /** Optional staff-entered reference for non-cash methods (UPI transaction
+   *  ID, card auth code, cheque number, bank transfer ref, etc.). Never
+   *  fabricated client-side — absent when the staff didn't provide one. */
+  reference?: string;
   notes?: string;
   paidAt: Date;
   createdBy?: mongoose.Types.ObjectId;
@@ -36,6 +47,8 @@ const PaymentSchema = new Schema<IPayment>(
     memberName: { type: String, required: true },
     planId: { type: Schema.Types.ObjectId, ref: "Plan" },
     planName: { type: String },
+    planFeatures: [{ type: String }],
+    planDurationDays: { type: Number },
     amount: { type: Number, required: true },
     kind: {
       type: String,
@@ -53,6 +66,7 @@ const PaymentSchema = new Schema<IPayment>(
       default: "paid",
     },
     invoiceNumber: { type: String, required: true, unique: true },
+    reference: { type: String },
     notes: { type: String },
     paidAt: { type: Date, default: Date.now },
     createdBy: { type: Schema.Types.ObjectId, ref: "Staff" },

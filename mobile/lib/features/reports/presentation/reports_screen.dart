@@ -50,30 +50,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Scaffold(
       backgroundColor: LatoColors.bgDark,
       appBar: AppBar(
-        backgroundColor: kReportSurface,
-        surfaceTintColor: Colors.transparent,
         toolbarHeight: 56,
-        elevation: 0,
-        shape: const Border(
-          bottom: BorderSide(color: kReportBorder, width: 1),
-        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: LatoColors.textPrimaryDark),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         title: Text(
           'Financial & Member Reports',
-          style: TextStyle(
-            color: theme.colorScheme.onSurface,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.45,
-          ),
+          style: theme.textTheme.headlineSmall,
         ),
-        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.ios_share, color: LatoColors.textPrimaryDark),
+            icon: const Icon(Icons.ios_share),
             onPressed: () => _showSoon('Share reports — coming soon'),
           ),
         ],
@@ -91,10 +79,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               onSwitchYear: () => _setYear(_selectedYear - 1),
             );
           }
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(20, 64, 20, 96),
-            child: ListView(
-              padding: EdgeInsets.zero,
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              LatoSpacing.xl,
+              LatoSpacing.sm,
+              LatoSpacing.xl,
+              LatoSpacing.xxl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ReportsYearSelector(
                   year: _selectedYear,

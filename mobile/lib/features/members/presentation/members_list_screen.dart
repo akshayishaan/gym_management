@@ -356,8 +356,11 @@ class _MemberCard extends StatelessWidget {
                   Text(member.planName!, style: theme.textTheme.bodySmall),
                 Text(member.phone, style: theme.textTheme.bodySmall),
                 if ((member.membershipExpiry ?? '').isNotEmpty)
-                  Text('Exp: ${member.membershipExpiry!}',
-                      style: theme.textTheme.bodySmall),
+                  Text(
+                    'Exp: ${member.membershipExpiry!}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: LatoColors.warning),
+                  ),
               ],
             ),
           ),
@@ -419,17 +422,20 @@ class _StatusChipForMember extends StatelessWidget {
         return const LatoStatusChip(
           label: 'ACTIVE',
           tone: LatoChipTone.primary,
+          icon: Icons.circle,
         );
       case 'expiring':
         final d = daysLeft ?? 0;
         return LatoStatusChip(
           label: 'EXPIRING: $d D LEFT',
           tone: LatoChipTone.warning,
+          icon: Icons.adjust,
         );
       case 'expired':
         return const LatoStatusChip(
           label: 'EXPIRED',
           tone: LatoChipTone.error,
+          icon: Icons.warning_amber_rounded,
         );
       default:
         return const SizedBox.shrink();
@@ -437,22 +443,41 @@ class _StatusChipForMember extends StatelessWidget {
   }
 }
 
-/// Right-side pill: orange "Due: $X" when dueAmount > 0, else green "PAID".
+/// Right-side solid badge: red "Due:$X" when dueAmount > 0, else green
+/// "PAID". Unlike [LatoStatusChip]'s translucent outline, this is a solid
+/// fill matching the Figma payment badge (node 2:1890) — colors sampled
+/// from the reference: a deep tinted fill with a brighter same-hue text,
+/// not a bright fill with white text.
 class _PaymentPill extends StatelessWidget {
   const _PaymentPill({required this.dueAmount});
   final double dueAmount;
 
+  static const _dueBg = Color(0xFF93000A);
+  static const _dueFg = Color(0xFFE88E89);
+  static const _paidBg = Color(0xFF1A301E);
+  static const _paidFg = Color(0xFF16A34A);
+
   @override
   Widget build(BuildContext context) {
-    if (dueAmount > 0) {
-      return LatoStatusChip(
-        label: 'Due: \$${dueAmount.round()}',
-        tone: LatoChipTone.warning,
-      );
-    }
-    return const LatoStatusChip(
-      label: 'PAID',
-      tone: LatoChipTone.success,
+    final isDue = dueAmount > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: LatoSpacing.sm,
+        vertical: LatoSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: isDue ? _dueBg : _paidBg,
+        borderRadius: BorderRadius.circular(LatoRadius.sm),
+      ),
+      child: Text(
+        isDue ? 'Due:\$${dueAmount.round()}' : 'PAID',
+        style: TextStyle(
+          color: isDue ? _dueFg : _paidFg,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.4,
+        ),
+      ),
     );
   }
 }

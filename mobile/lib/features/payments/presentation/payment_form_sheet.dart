@@ -37,6 +37,7 @@ class PaymentFormSheet extends ConsumerStatefulWidget {
 class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
+  final _referenceCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
   String? _selectedMemberId;
@@ -60,6 +61,7 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _referenceCtrl.dispose();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -386,6 +388,9 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
             amount: amount,
             method: _method,
             planId: _selectedPlanId,
+            reference: _referenceCtrl.text.trim().isEmpty
+                ? null
+                : _referenceCtrl.text.trim(),
             notes: _notesCtrl.text.trim().isEmpty
                 ? null
                 : _notesCtrl.text.trim(),
@@ -621,6 +626,19 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
                         value: _methodLabel(_method),
                         icon: Icons.payments_outlined,
                         onTap: _pickMethod,
+                      ),
+                      const SizedBox(height: LatoSpacing.lg),
+                      // Reference — optional paper trail for non-cash
+                      // methods (UPI txn ID, card auth code, cheque #,
+                      // bank transfer ref). Shown on the invoice only
+                      // when filled in; never fabricated.
+                      _FieldLabel(text: 'Reference / Transaction ID'),
+                      const SizedBox(height: LatoSpacing.sm),
+                      TextFormField(
+                        controller: _referenceCtrl,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. UPI txn ID, card auth code, cheque #',
+                        ),
                       ),
                       const SizedBox(height: LatoSpacing.lg),
                       // Notes

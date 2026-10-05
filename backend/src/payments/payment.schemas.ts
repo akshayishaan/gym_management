@@ -10,6 +10,7 @@ export const paymentCreateSchema = z.object({
   amount: z.number().min(0, "Amount must be non-negative"),
   method: z.enum(["cash", "card", "upi", "bank_transfer", "other"]),
   membershipStart: membershipDateSchema.optional(),
+  reference: z.string().max(200).trim().optional(),
   notes: z.string().max(1000).optional(),
 }).superRefine((value, context) => {
   if (!value.planId && value.membershipStart) {

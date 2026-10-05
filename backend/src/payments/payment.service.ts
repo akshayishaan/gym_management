@@ -119,7 +119,8 @@ export class PaymentsService {
     await this.connection.getConnection();
 
     const validated = paymentCreateSchema.parse(body);
-    const { requestId, memberId, planId, amount, method, membershipStart, notes } = validated;
+    const { requestId, memberId, planId, amount, method, membershipStart, reference, notes } =
+      validated;
 
     const result = await recordPayment({
       gymId: String(gymId),
@@ -131,6 +132,7 @@ export class PaymentsService {
       amount,
       method,
       membershipStart,
+      reference,
       notes,
     });
 

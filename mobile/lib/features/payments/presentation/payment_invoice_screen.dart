@@ -3,6 +3,7 @@
 // Paid/Void/Refund), member + invoice side-by-side cards, itemized charges
 // card with breakdown, and Download PDF / Print Receipt actions.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -372,9 +373,6 @@ class _TotalCard extends StatelessWidget {
     final cents =
         ((payment.amount - whole).abs() * 100).round().toString().padLeft(2, '0');
     final wholeFmt = NumberFormat.decimalPattern().format(whole);
-    final refShort = payment.id.length >= 6
-        ? payment.id.substring(payment.id.length - 6)
-        : payment.id;
 
     return LatoCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -439,45 +437,54 @@ class _TotalCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: LatoSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'REF: tx_${refShort}_prod',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: LatoColors.textSecondaryDark,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('REF copied')),
-                  );
-                },
-                icon: const Icon(Icons.content_copy, size: 14),
-                label: const Text(
-                  'Copy',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+          // Only a real, staff-entered reference is shown here — cash
+          // payments (and any payment recorded without one) have no
+          // transaction reference, so there is nothing honest to display.
+          if (payment.reference != null && payment.reference!.isNotEmpty) ...[
+            const SizedBox(height: LatoSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'REF: ${payment.reference}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: LatoColors.textSecondaryDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                style: TextButton.styleFrom(
-                  foregroundColor: LatoColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: LatoSpacing.sm,
-                    vertical: 0,
+                TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: payment.reference!),
+                    );
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('REF copied')),
+                    );
+                  },
+                  icon: const Icon(Icons.content_copy, size: 14),
+                  label: const Text(
+                    'Copy',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  minimumSize: const Size(0, 28),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  style: TextButton.styleFrom(
+                    foregroundColor: LatoColors.primary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: LatoSpacing.sm,
+                      vertical: 0,
+                    ),
+                    minimumSize: const Size(0, 28),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -537,9 +544,11 @@ class _MemberCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (payment.status == 'paid')
-                const LatoStatusChip(
-                  label: 'TIER 1',
+              // Real plan name (when this payment is a plan purchase) —
+              // was a hardcoded 'TIER 1' chip with no backing concept.
+              if (payment.planName != null && payment.planName!.isNotEmpty)
+                LatoStatusChip(
+                  label: payment.planName!,
                   tone: LatoChipTone.primary,
                 ),
             ],
@@ -605,6 +614,29 @@ class _InvoiceCodeCard extends StatelessWidget {
   }
 }
 
+/// Friendly label for a plan's billing cycle from its real `durationDays`
+/// snapshot. Falls back to "N days" for anything that isn't one of the
+/// common buckets rather than guessing.
+String _cycleLabel(int durationDays) {
+  switch (durationDays) {
+    case 1:
+      return 'Daily';
+    case 7:
+      return 'Weekly';
+    case 30:
+    case 31:
+      return 'Monthly';
+    case 90:
+    case 91:
+      return 'Quarterly';
+    case 365:
+    case 366:
+      return 'Annual';
+    default:
+      return '$durationDays days';
+  }
+}
+
 class _ItemizedCard extends StatelessWidget {
   const _ItemizedCard({required this.payment});
   final Payment payment;
@@ -615,9 +647,16 @@ class _ItemizedCard extends StatelessWidget {
     final planName = (payment.planName == null || payment.planName!.isEmpty)
         ? 'Membership Payment'
         : payment.planName!;
-    final description = (payment.notes == null || payment.notes!.isEmpty)
-        ? 'Includes peak hour access, recovery suite, cold plunge, towel service & quarterly biometric performance assessment.'
-        : payment.notes!;
+    // Prefer the real snapshot of what the plan actually included at
+    // purchase time; fall back to the staff's own notes; show nothing
+    // invented when neither exists (e.g. a dues payment, or a payment
+    // recorded before planFeatures existed).
+    final features = payment.planFeatures ?? const <String>[];
+    final description = features.isNotEmpty
+        ? features.join(' • ')
+        : (payment.notes != null && payment.notes!.isNotEmpty)
+            ? payment.notes!
+            : null;
     final amount = payment.amount;
 
     return LatoCard(
@@ -663,23 +702,29 @@ class _ItemizedCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: LatoSpacing.xs),
-          Text(
-            description,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          if (description != null) ...[
+            const SizedBox(height: LatoSpacing.xs),
+            Text(
+              description,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: LatoSpacing.sm),
           Wrap(
             spacing: LatoSpacing.sm,
             runSpacing: LatoSpacing.xs,
-            children: const [
-              LatoStatusChip(
-                label: 'Cycle: Monthly',
-                tone: LatoChipTone.neutral,
-              ),
-              LatoStatusChip(
+            children: [
+              // Real snapshot of the plan's duration at purchase time —
+              // was a hardcoded 'Cycle: Monthly' shown regardless of the
+              // plan's actual billing cycle.
+              if (payment.planDurationDays != null)
+                LatoStatusChip(
+                  label: 'Cycle: ${_cycleLabel(payment.planDurationDays!)}',
+                  tone: LatoChipTone.neutral,
+                ),
+              const LatoStatusChip(
                 label: 'Qty: 1',
                 tone: LatoChipTone.neutral,
               ),
