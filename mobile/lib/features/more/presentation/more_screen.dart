@@ -69,6 +69,12 @@ class MoreScreen extends ConsumerWidget {
                 title: 'My Gyms',
                 subtitle: 'Switch active location & manage facility branches',
                 route: '/gym/picker',
+              ),
+              _NavRow(
+                icon: Icons.settings_outlined,
+                title: 'Gym Settings',
+                subtitle: 'Name, address, currency, timezone & reminders',
+                route: '/settings',
                 isLast: true,
               ),
             ],
