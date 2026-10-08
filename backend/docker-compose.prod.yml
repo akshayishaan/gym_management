@@ -1,0 +1,94 @@
+# =============================================================================
+# Gym Management — PRODUCTION backend stack (deployed via GitHub Actions)
+#
+# This compose file is used ON THE VM by the CI/CD pipeline. Unlike
+# `docker-compose.yml` (which builds the image locally with `build: .`), this
+# file pulls a PREBUILT ARM64 image from GHCR. The image is built and pushed by
+# `.github/workflows/deploy.yml` on every push to `main`.
+#
+# Required environment (set in `backend/.env` on the VM — see
+# `.env.production.example`). Variables marked `:?` have NO default and will
+# fail fast if unset, so secrets are never silently defaulted in production.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB — single-node replica set (transactions require a replica set).
+  # Auth is ENABLED in production: root credentials are required and the
+  # backend MONGODB_URI embeds matching credentials.
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    entrypoint: ["/bin/bash", "/docker-entrypoint-initdb.d/mongo-init.sh"]
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    environment:
+      # Required in production — no insecure default.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?set MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?set MONGO_INITDB_ROOT_PASSWORD}
+      REPL_SET_NAME: rs0
+      MONGO_HOST_NAME: mongo
+      MONGO_PORT: "27017"
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - backend-net
+
+  # ---------------------------------------------------------------------------
+  # Redis — read cache + BullMQ invalidation queue.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - backend-net
+
+  # ---------------------------------------------------------------------------
+  # Backend — NestJS API, pulled as a prebuilt ARM64 image from GHCR.
+  # ---------------------------------------------------------------------------
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/akshayishaan/gym_management/backend:latest}
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # Replica-set connection string. `?replicaSet=rs0` is required for
+      # transactions (ADR-0001). The URI is built by the deploy job with the
+      # password URL-encoded, so reserved characters (e.g. `@`) do not break
+      # parsing. See .github/workflows/release.yml.
+      MONGODB_URI: ${MONGODB_URI:?set MONGODB_URI}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+    ports:
+      - "3001:3001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend-net
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  backend-net:
+    driver: bridge

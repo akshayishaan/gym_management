@@ -1,0 +1,2819 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Gym Management API",
+    "version": "0.1.0",
+    "description": "Multi-tenant gym management API. All endpoints are JSON; authenticated routes require a Bearer token."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "SignupInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password"
+        ]
+      },
+      "LoginInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RefreshInput": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "GymCreateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "logo": {
+            "type": "string"
+          },
+          "primaryColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "default": "#6366f1"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "default": "INR"
+          },
+          "timezone": {
+            "type": "string",
+            "default": "Asia/Kolkata"
+          },
+          "expiryReminderDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90,
+            "default": 7
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GymUpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "logo": {
+            "type": "string"
+          },
+          "primaryColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "currency": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "expiryReminderDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 90
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MemberCreateInput": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "photo": {
+            "type": "string",
+            "format": "uri"
+          },
+          "dateOfBirth": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female",
+              "other"
+            ]
+          },
+          "planId": {
+            "type": "string"
+          },
+          "membershipStart": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "emergencyContact": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "amountPaid": {
+            "type": "number",
+            "minimum": 0
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "upi",
+              "bank_transfer",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "requestId",
+          "name",
+          "phone"
+        ]
+      },
+      "MemberUpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "photo": {
+            "type": "string",
+            "format": "uri"
+          },
+          "dateOfBirth": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female",
+              "other"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "emergencyContact": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PlanCreateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "durationDays": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "maxItems": 20
+          },
+          "isActive": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name",
+          "durationDays",
+          "price"
+        ]
+      },
+      "PlanUpdateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "durationDays": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "price": {
+            "type": "number",
+            "minimum": 0
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "maxItems": 20
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaymentCreateInput": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "memberId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "planId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "upi",
+              "bank_transfer",
+              "other"
+            ]
+          },
+          "membershipStart": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "requestId",
+          "memberId",
+          "amount",
+          "method"
+        ]
+      },
+      "PaymentActionInput": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "requestId"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "details": {
+            "nullable": true
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "AuthSessionResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "gymIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "email",
+              "role",
+              "gymIds"
+            ]
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "user"
+        ]
+      },
+      "SignupResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "GymResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "logo": {
+            "type": "string"
+          },
+          "primaryColor": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "expiryReminderDays": {
+            "type": "number"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          }
+        },
+        "required": [
+          "_id",
+          "name",
+          "primaryColor",
+          "currency",
+          "timezone",
+          "expiryReminderDays",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MemberDisplayStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "expiring",
+          "expired"
+        ]
+      },
+      "MemberResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "photo": {
+            "type": "string"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "male",
+              "female",
+              "other"
+            ]
+          },
+          "planId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "membershipStart": {
+            "type": "string",
+            "description": "Calendar date in YYYY-MM-DD format"
+          },
+          "membershipExpiry": {
+            "type": "string",
+            "description": "Calendar date in YYYY-MM-DD format"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "emergencyContact": {
+            "type": "string"
+          },
+          "dueAmount": {
+            "type": "number"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MemberDisplayStatus"
+          },
+          "daysUntilExpiry": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          }
+        },
+        "required": [
+          "_id",
+          "gymId",
+          "name",
+          "phone",
+          "dueAmount",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MemberListResponse": {
+        "type": "object",
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemberResponse"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "members",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "PaymentResponse": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "memberName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan_purchase",
+              "dues"
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "upi",
+              "bank_transfer",
+              "other"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "paid",
+              "voided",
+              "refunded"
+            ]
+          },
+          "invoiceNumber": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "paidAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "voidedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "voidedBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "voidReason": {
+            "type": "string"
+          },
+          "refundedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "refundedBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "refundReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          }
+        },
+        "required": [
+          "_id",
+          "gymId",
+          "memberId",
+          "memberName",
+          "amount",
+          "kind",
+          "method",
+          "status",
+          "invoiceNumber",
+          "paidAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MemberCreateResponse": {
+        "type": "object",
+        "properties": {
+          "member": {
+            "$ref": "#/components/schemas/MemberResponse"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentResponse"
+          },
+          "membershipId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          }
+        },
+        "required": [
+          "member",
+          "payment"
+        ]
+      },
+      "PaymentListItemResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "memberName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan_purchase",
+              "dues"
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "cash",
+              "card",
+              "upi",
+              "bank_transfer",
+              "other"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "paid",
+              "voided",
+              "refunded"
+            ]
+          },
+          "invoiceNumber": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "paidAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "voidedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "voidedBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "voidReason": {
+            "type": "string"
+          },
+          "refundedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "refundedBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "refundReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "membershipId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "membershipStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "reversed"
+            ]
+          }
+        },
+        "required": [
+          "_id",
+          "gymId",
+          "memberId",
+          "memberName",
+          "amount",
+          "kind",
+          "method",
+          "status",
+          "invoiceNumber",
+          "paidAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaymentListResponse": {
+        "type": "object",
+        "properties": {
+          "payments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "gymId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "memberId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "memberName": {
+                  "type": "string"
+                },
+                "planId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "planName": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "plan_purchase",
+                    "dues"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "cash",
+                    "card",
+                    "upi",
+                    "bank_transfer",
+                    "other"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "paid",
+                    "voided",
+                    "refunded"
+                  ]
+                },
+                "invoiceNumber": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "paidAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "createdBy": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "voidedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "voidedBy": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "voidReason": {
+                  "type": "string"
+                },
+                "refundedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "refundedBy": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "refundReason": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "membershipId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "membershipStatus": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "reversed"
+                  ]
+                }
+              },
+              "required": [
+                "_id",
+                "gymId",
+                "memberId",
+                "memberName",
+                "amount",
+                "kind",
+                "method",
+                "status",
+                "invoiceNumber",
+                "paidAt",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "netAmount": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "netAmount"
+            ]
+          }
+        },
+        "required": [
+          "payments",
+          "total",
+          "page",
+          "limit",
+          "summary"
+        ]
+      },
+      "PaymentCreateResponse": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "paymentId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "membershipId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "renewedUntil": {
+            "type": "string",
+            "description": "Calendar date in YYYY-MM-DD format"
+          },
+          "dueAmount": {
+            "type": "number"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/PaymentResponse"
+          }
+        },
+        "required": [
+          "memberId",
+          "payment"
+        ]
+      },
+      "LifecycleResultResponse": {
+        "type": "object",
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "paymentId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "membershipId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "renewedUntil": {
+            "type": "string",
+            "description": "Calendar date in YYYY-MM-DD format"
+          },
+          "dueAmount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "memberId"
+        ]
+      },
+      "PlanResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "durationDays": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          }
+        },
+        "required": [
+          "_id",
+          "gymId",
+          "name",
+          "durationDays",
+          "price",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PlanListItemResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "durationDays": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "stats": {
+            "type": "object",
+            "properties": {
+              "activeMembers": {
+                "type": "number"
+              },
+              "salesYtd": {
+                "type": "number"
+              },
+              "revenueAtSaleYtd": {
+                "type": "number"
+              },
+              "totalMemberships": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "activeMembers",
+              "salesYtd",
+              "revenueAtSaleYtd",
+              "totalMemberships"
+            ]
+          }
+        },
+        "required": [
+          "_id",
+          "gymId",
+          "name",
+          "durationDays",
+          "price",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PlanListResponse": {
+        "type": "object",
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "gymId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "durationDays": {
+                  "type": "number"
+                },
+                "price": {
+                  "type": "number"
+                },
+                "features": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "isActive": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "stats": {
+                  "type": "object",
+                  "properties": {
+                    "activeMembers": {
+                      "type": "number"
+                    },
+                    "salesYtd": {
+                      "type": "number"
+                    },
+                    "revenueAtSaleYtd": {
+                      "type": "number"
+                    },
+                    "totalMemberships": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "activeMembers",
+                    "salesYtd",
+                    "revenueAtSaleYtd",
+                    "totalMemberships"
+                  ]
+                }
+              },
+              "required": [
+                "_id",
+                "gymId",
+                "name",
+                "durationDays",
+                "price",
+                "isActive",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "activePlans": {
+                "type": "number"
+              },
+              "activeMembers": {
+                "type": "number"
+              },
+              "salesYtd": {
+                "type": "number"
+              },
+              "revenueAtSaleYtd": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "activePlans",
+              "activeMembers",
+              "salesYtd",
+              "revenueAtSaleYtd"
+            ]
+          }
+        },
+        "required": [
+          "plans",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "MembershipResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "planId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "Calendar date in YYYY-MM-DD format"
+          },
+          "expiryDate": {
+            "type": "string",
+            "description": "Calendar date in YYYY-MM-DD format"
+          },
+          "paymentId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "planPrice": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "grantedBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "reversed"
+            ]
+          },
+          "expiryStatus": {
+            "$ref": "#/components/schemas/MemberDisplayStatus"
+          },
+          "durationDays": {
+            "type": "integer"
+          },
+          "reversedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "reversedBy": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "reversalReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          }
+        },
+        "required": [
+          "_id",
+          "gymId",
+          "memberId",
+          "planName",
+          "startDate",
+          "expiryDate",
+          "grantedBy",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MembershipListResponse": {
+        "type": "object",
+        "properties": {
+          "memberships": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "gymId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "memberId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "planId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "planName": {
+                  "type": "string"
+                },
+                "startDate": {
+                  "type": "string",
+                  "description": "Calendar date in YYYY-MM-DD format"
+                },
+                "expiryDate": {
+                  "type": "string",
+                  "description": "Calendar date in YYYY-MM-DD format"
+                },
+                "paymentId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "planPrice": {
+                  "type": "number"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "grantedBy": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "reversed"
+                  ]
+                },
+                "expiryStatus": {
+                  "$ref": "#/components/schemas/MemberDisplayStatus"
+                },
+                "durationDays": {
+                  "type": "integer"
+                },
+                "reversedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "reversedBy": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "reversalReason": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                }
+              },
+              "required": [
+                "_id",
+                "gymId",
+                "memberId",
+                "planName",
+                "startDate",
+                "expiryDate",
+                "grantedBy",
+                "status",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "memberships"
+        ]
+      },
+      "DashboardResponse": {
+        "type": "object",
+        "properties": {
+          "totalMembers": {
+            "type": "number"
+          },
+          "activeMembers": {
+            "type": "number"
+          },
+          "expiredMembers": {
+            "type": "number"
+          },
+          "expiringMembers": {
+            "type": "number"
+          },
+          "monthRevenue": {
+            "type": "number"
+          },
+          "recentPayments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "memberName": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "paidAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "cash",
+                    "card",
+                    "upi",
+                    "bank_transfer",
+                    "other"
+                  ]
+                }
+              },
+              "required": [
+                "_id",
+                "memberName",
+                "amount",
+                "paidAt",
+                "method"
+              ]
+            }
+          },
+          "expiringList": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "membershipExpiry": {
+                  "type": "string",
+                  "description": "Calendar date in YYYY-MM-DD format"
+                },
+                "planName": {
+                  "type": "string"
+                },
+                "daysUntilExpiry": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "_id",
+                "name",
+                "phone",
+                "membershipExpiry",
+                "daysUntilExpiry"
+              ]
+            }
+          }
+        },
+        "required": [
+          "totalMembers",
+          "activeMembers",
+          "expiredMembers",
+          "expiringMembers",
+          "monthRevenue",
+          "recentPayments",
+          "expiringList"
+        ]
+      },
+      "ReportsResponse": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "number"
+          },
+          "asOf": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "revenue": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "number"
+                  },
+                  "previous": {
+                    "type": "number"
+                  },
+                  "changePercent": {
+                    "type": "number",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "value",
+                  "previous",
+                  "changePercent"
+                ]
+              },
+              "transactions": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "number"
+                  },
+                  "previous": {
+                    "type": "number"
+                  },
+                  "changePercent": {
+                    "type": "number",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "value",
+                  "previous",
+                  "changePercent"
+                ]
+              },
+              "newMembers": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "number"
+                  },
+                  "previous": {
+                    "type": "number"
+                  },
+                  "changePercent": {
+                    "type": "number",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "value",
+                  "previous",
+                  "changePercent"
+                ]
+              },
+              "renewals": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "number"
+                  },
+                  "previous": {
+                    "type": "number"
+                  },
+                  "changePercent": {
+                    "type": "number",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "value",
+                  "previous",
+                  "changePercent"
+                ]
+              },
+              "activeMembers": {
+                "type": "number"
+              },
+              "outstandingDues": {
+                "type": "number"
+              },
+              "dueMembers": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "revenue",
+              "transactions",
+              "newMembers",
+              "renewals",
+              "activeMembers",
+              "outstandingDues",
+              "dueMembers"
+            ]
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "number"
+                },
+                "revenue": {
+                  "type": "number"
+                },
+                "transactions": {
+                  "type": "number"
+                },
+                "newMembers": {
+                  "type": "number"
+                },
+                "memberships": {
+                  "type": "number"
+                },
+                "renewals": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "month",
+                "revenue",
+                "transactions",
+                "newMembers",
+                "memberships",
+                "renewals"
+              ]
+            }
+          },
+          "planPerformance": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "planId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "revenue": {
+                  "type": "number"
+                },
+                "sales": {
+                  "type": "number"
+                },
+                "activeMembers": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "revenue",
+                "sales",
+                "activeMembers"
+              ]
+            }
+          },
+          "paymentMethods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "percentage": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "method",
+                "amount",
+                "count",
+                "percentage"
+              ]
+            }
+          },
+          "insights": {
+            "type": "object",
+            "properties": {
+              "expiringSoon": {
+                "type": "number"
+              },
+              "expiredMembers": {
+                "type": "number"
+              },
+              "dueMembers": {
+                "type": "number"
+              },
+              "outstandingDues": {
+                "type": "number"
+              },
+              "bestMonth": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "month": {
+                    "type": "number"
+                  },
+                  "revenue": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "month",
+                  "revenue"
+                ]
+              }
+            },
+            "required": [
+              "expiringSoon",
+              "expiredMembers",
+              "dueMembers",
+              "outstandingDues",
+              "bestMonth"
+            ]
+          }
+        },
+        "required": [
+          "year",
+          "asOf",
+          "timezone",
+          "summary",
+          "series",
+          "planPerformance",
+          "paymentMethods",
+          "insights"
+        ]
+      },
+      "ActivityLogResponse": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "gymId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "staffId": {
+            "type": "string",
+            "description": "Mongo ObjectId serialized as a string"
+          },
+          "staffName": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 date-time string"
+          }
+        },
+        "required": [
+          "_id",
+          "staffName",
+          "action",
+          "entity",
+          "createdAt"
+        ]
+      },
+      "ActivityListResponse": {
+        "type": "object",
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "_id": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "gymId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "staffId": {
+                  "type": "string",
+                  "description": "Mongo ObjectId serialized as a string"
+                },
+                "staffName": {
+                  "type": "string"
+                },
+                "action": {
+                  "type": "string"
+                },
+                "entity": {
+                  "type": "string"
+                },
+                "entityId": {
+                  "type": "string"
+                },
+                "details": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 date-time string"
+                }
+              },
+              "required": [
+                "_id",
+                "staffName",
+                "action",
+                "entity",
+                "createdAt"
+              ]
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "logs",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Log in",
+        "requestBody": {
+          "description": "Credentials",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "summary": "Create an account",
+        "requestBody": {
+          "description": "New account",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh access token",
+        "requestBody": {
+          "description": "Refresh token",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authentication session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gyms": {
+      "get": {
+        "summary": "List gyms",
+        "responses": {
+          "200": {
+            "description": "List of gyms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GymResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a gym",
+        "requestBody": {
+          "description": "New gym",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GymCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created gym",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gyms/{id}": {
+      "get": {
+        "summary": "Get a gym",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gym",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a gym",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Gym changes",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GymUpdateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated gym",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GymResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a gym",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/members": {
+      "get": {
+        "summary": "List members",
+        "responses": {
+          "200": {
+            "description": "Paginated members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a member",
+        "requestBody": {
+          "description": "New member",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/members/{id}": {
+      "get": {
+        "summary": "Get a member",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a member",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Member changes",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberUpdateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete a member",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans": {
+      "get": {
+        "summary": "List plans",
+        "responses": {
+          "200": {
+            "description": "Paginated plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a plan",
+        "requestBody": {
+          "description": "New plan",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/{id}": {
+      "put": {
+        "summary": "Update a plan",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Plan changes",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanUpdateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments": {
+      "get": {
+        "summary": "List payments",
+        "responses": {
+          "200": {
+            "description": "Paginated payments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Record a payment",
+        "requestBody": {
+          "description": "New payment",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Recorded payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentCreateResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{id}": {
+      "get": {
+        "summary": "Get a payment",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a payment (rejected — audit record)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{id}/void": {
+      "post": {
+        "summary": "Void a payment",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Void request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentActionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Void result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{id}/refund": {
+      "post": {
+        "summary": "Refund a payment",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Refund request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentActionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refund result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memberships": {
+      "get": {
+        "summary": "List memberships",
+        "responses": {
+          "200": {
+            "description": "Memberships",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memberships/{id}/reverse": {
+      "post": {
+        "summary": "Reverse a plan purchase",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Reversal request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentActionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reversal result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LifecycleResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "summary": "Gym dashboard summary",
+        "responses": {
+          "200": {
+            "description": "Dashboard summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports": {
+      "get": {
+        "summary": "Annual gym report",
+        "responses": {
+          "200": {
+            "description": "Annual report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/activity": {
+      "get": {
+        "summary": "Activity log",
+        "responses": {
+          "200": {
+            "description": "Paginated activity log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

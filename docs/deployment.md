@@ -1,0 +1,113 @@
+# Deployment
+
+Deployment of the NestJS backend to an ARM64 cloud VM (ARM64 /
+aarch64, Ubuntu 24.04).
+
+> **Deployment is now release-driven.** The backend is built and deployed when
+> a GitHub release is published — see `docs/releases.md` for the full flow,
+> versioning, APK signing, and rollback. This page documents the VM setup and
+> the deploy mechanics.
+
+## Architecture
+
+```
+publish a GitHub release
+        │
+        ▼
+GitHub Actions ── build linux/arm64 image (QEMU) ──► push to GHCR
+        │                                              (ghcr.io/akshayishaan/gym_management/backend)
+        ▼
+SSH into VM ── git pull ── docker compose pull ── up -d ── health check
+```
+
+1. **build-backend-image** builds the backend for `linux/arm64` (the VM is
+   aarch64) using QEMU emulation on the amd64 runner, then pushes to
+   GHCR tagged `latest`, the release tag, **and** the commit SHA (the SHA tag
+   enables rollback).
+2. **deploy-backend** SSHes into the VM, pulls the latest code, pulls the new
+   image, restarts the compose stack, and polls `/health` until it returns 200.
+
+The repo is public, so Actions minutes are free and the VM can `git pull` over
+HTTPS without auth.
+
+## Required GitHub secrets
+
+Configure these under **Settings → Secrets and variables → Actions → Secrets**
+(repository secrets).
+
+| Secret | Value |
+| --- | --- |
+| `SSH_HOST` | `80.225.251.105` (the VM's reserved public IP) |
+| `SSH_USER` | `ubuntu` |
+| `SSH_PRIVATE_KEY` | Full contents of the VM's private key (e.g. `~/.ssh/deploy_key` on your machine) |
+| `SSH_PORT` | `22` |
+| `MONGO_INITDB_ROOT_USERNAME` | Mongo root user (e.g. `admin`) |
+| `MONGO_INITDB_ROOT_PASSWORD` | Strong value, e.g. `openssl rand -hex 24` |
+| `JWT_SECRET` | Strong value, e.g. `openssl rand -hex 32` |
+| `JWT_REFRESH_SECRET` | Strong value, e.g. `openssl rand -hex 32` |
+
+`GITHUB_TOKEN` is provided automatically by Actions — no secret needed.
+
+The four app secrets are injected into `backend/.env` on the VM by the deploy
+job on every run, so the VM holds no manually-managed secrets. To rotate a
+value, update the GitHub secret and re-run the workflow.
+
+> **Mongo password rotation caveat:** the root user is created only on the
+> first boot of the `mongo` volume. Changing `MONGO_INITDB_ROOT_PASSWORD`
+> later does NOT update the existing user — you must either update the user
+> manually or wipe the `mongo-data` volume (which deletes all data).
+
+## VM one-time setup
+
+Run once on the VM before the first deploy:
+
+1. **Install Docker** (Docker Engine + the compose plugin):
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   sudo usermod -aG docker ubuntu   # then log out/in
+   ```
+2. **Clone the repo** (public, HTTPS, no auth):
+   ```bash
+   git clone https://github.com/akshayishaan/gym_management.git ~/gym_management
+   ```
+3. **Confirm the cloud firewall / security group** allows inbound TCP **22** (SSH) and
+   **3001** (API). Both are already open on this VM.
+
+No `.env` file needs to be created by hand — the deploy job writes it from
+GitHub secrets.
+
+## How to trigger
+
+- **Automatic**: publish a GitHub release (see `docs/releases.md`). A draft
+  release is created automatically when a PR is merged to `main`.
+
+## How to roll back
+
+Redeploy a previous image by pinning `BACKEND_IMAGE` to a SHA tag in the VM's
+`backend/.env`, then restart:
+
+```bash
+cd ~/gym_management/backend
+# set BACKEND_IMAGE=ghcr.io/akshayishaan/gym_management/backend:<sha> in .env
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Every push tags the image with its commit SHA, so any prior deploy is
+recoverable.
+
+## Troubleshooting
+
+- **GHCR auth / pull failures**: the image is anonymously pullable for a
+  public repo, but the deploy logs in with `GITHUB_TOKEN` to avoid rate limits.
+  If pulls fail, confirm the package exists under the repo's **Packages** tab
+  and that `permissions.packages: write` is set in the workflow.
+- **Health check fails after deploy**: SSH in and inspect logs —
+  `docker compose -f docker-compose.prod.yml logs backend`. Common causes:
+  missing/incorrect `JWT_SECRET`/`JWT_REFRESH_SECRET` (the `:?` guard fails
+  fast), or Mongo auth mismatch between `MONGO_INITDB_ROOT_*` and the embedded
+  `MONGODB_URI`.
+- **Mongo replica set not ready**: the `mongo-init.sh` entrypoint starts
+  mongod, runs `rs.initiate()`, and waits for PRIMARY before the backend's
+  `depends_on: service_healthy` gate passes. If it hangs, check
+  `docker compose -f docker-compose.prod.yml logs mongo` and confirm
+  `MONGO_HOST_NAME=mongo` (the service name) is set.

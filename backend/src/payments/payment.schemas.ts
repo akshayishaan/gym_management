@@ -1,0 +1,26 @@
+import { z } from "zod";
+import { isDateOnly } from "../lib/membershipCalendar";
+
+export const membershipDateSchema = z.string().refine(isDateOnly, "Use a valid YYYY-MM-DD date");
+
+export const paymentCreateSchema = z.object({
+  requestId: z.string().uuid("Invalid request ID"),
+  memberId: z.string().min(1, "Member ID is required"),
+  planId: z.string().optional(),
+  amount: z.number().min(0, "Amount must be non-negative"),
+  method: z.enum(["cash", "card", "upi", "bank_transfer", "other"]),
+  membershipStart: membershipDateSchema.optional(),
+  reference: z.string().max(200).trim().optional(),
+  notes: z.string().max(1000).optional(),
+}).superRefine((value, context) => {
+  if (!value.planId && value.membershipStart) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["membershipStart"], message: "Membership start is only valid for a Plan purchase" });
+  }
+});
+
+export const paymentActionSchema = z.object({
+  requestId: z.string().uuid("Invalid request ID"),
+  reason: z.string().max(500).trim().optional(),
+});
+export type PaymentCreateInput = z.infer<typeof paymentCreateSchema>;
+export type PaymentActionInput = z.infer<typeof paymentActionSchema>;

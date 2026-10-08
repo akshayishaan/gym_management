@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+
+# Build output (rebuilt inside the image)
+dist
+
+# Environment / secrets — never bake into the image
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# VCS
+.git
+.gitignore
+
+# Tooling / local state
+.omc
+coverage
+openapi.json
+
+# OS
+.DS_Store
