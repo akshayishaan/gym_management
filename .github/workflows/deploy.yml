@@ -77,20 +77,40 @@ jobs:
     steps:
       - name: Deploy to Oracle Cloud VM
         uses: appleboy/ssh-action@v1
+        # `envs` forwards the listed vars from the `env` block below into the
+        # remote shell, so the script can write them to .env without ever
+        # embedding secret values in the script text (which could leak in logs).
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          envs: MONGO_INITDB_ROOT_USERNAME,MONGO_INITDB_ROOT_PASSWORD,JWT_SECRET,JWT_REFRESH_SECRET
           # Fail fast on any command error; don't mask the deploy output.
           script: |
             set -e
             cd ~/gym_management/backend
             git pull --ff-only
+
+            # Regenerate .env from GitHub secrets on every deploy so the VM
+            # holds no manually-managed secrets. `umask` keeps it 600.
+            umask 077
+            cat > .env <<EOF
+            MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME
+            MONGO_INITDB_ROOT_PASSWORD=$MONGO_INITDB_ROOT_PASSWORD
+            JWT_SECRET=$JWT_SECRET
+            JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+            EOF
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose -f docker-compose.prod.yml pull backend
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
+        env:
+          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
 
       # Poll the backend /health endpoint until it returns 200 (or time out).
       - name: Health check

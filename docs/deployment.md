@@ -26,7 +26,8 @@ HTTPS without auth.
 
 ## Required GitHub secrets
 
-Configure these under **Settings → Secrets and variables → Actions**.
+Configure these under **Settings → Secrets and variables → Actions → Secrets**
+(repository secrets).
 
 | Secret | Value |
 | --- | --- |
@@ -34,8 +35,21 @@ Configure these under **Settings → Secrets and variables → Actions**.
 | `SSH_USER` | `ubuntu` |
 | `SSH_PRIVATE_KEY` | Full contents of the VM's private key (`~/.ssh/oci_second_account` on your machine) |
 | `SSH_PORT` | `22` |
+| `MONGO_INITDB_ROOT_USERNAME` | Mongo root user (e.g. `admin`) |
+| `MONGO_INITDB_ROOT_PASSWORD` | Strong value, e.g. `openssl rand -hex 24` |
+| `JWT_SECRET` | Strong value, e.g. `openssl rand -hex 32` |
+| `JWT_REFRESH_SECRET` | Strong value, e.g. `openssl rand -hex 32` |
 
 `GITHUB_TOKEN` is provided automatically by Actions — no secret needed.
+
+The four app secrets are injected into `backend/.env` on the VM by the deploy
+job on every run, so the VM holds no manually-managed secrets. To rotate a
+value, update the GitHub secret and re-run the workflow.
+
+> **Mongo password rotation caveat:** the root user is created only on the
+> first boot of the `mongo` volume. Changing `MONGO_INITDB_ROOT_PASSWORD`
+> later does NOT update the existing user — you must either update the user
+> manually or wipe the `mongo-data` volume (which deletes all data).
 
 ## VM one-time setup
 
@@ -50,15 +64,11 @@ Run once on the VM before the first deploy:
    ```bash
    git clone https://github.com/akshayishaan/gym_management.git ~/gym_management
    ```
-3. **Create the env file** with real secrets:
-   ```bash
-   cd ~/gym_management/backend
-   cp .env.production.example .env
-   chmod 600 .env
-   # edit .env: MONGO_INITDB_ROOT_USERNAME/PASSWORD, JWT_SECRET, JWT_REFRESH_SECRET
-   ```
-4. **Confirm the OCI security list** allows inbound TCP **22** (SSH) and
+3. **Confirm the OCI security list** allows inbound TCP **22** (SSH) and
    **3001** (API). Both are already open on this VM.
+
+No `.env` file needs to be created by hand — the deploy job writes it from
+GitHub secrets.
 
 ## How to trigger
 
