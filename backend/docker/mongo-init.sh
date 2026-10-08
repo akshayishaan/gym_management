@@ -12,7 +12,12 @@ set -euo pipefail
 #   2. Waits until mongod answers a ping.
 #   3. Runs `rs.initiate()` idempotently (safe to re-run across restarts).
 #   4. Waits until the node reports PRIMARY.
-#   5. Keeps mongod in the foreground so the container stays alive.
+#   5. If MONGO_INITDB_ROOT_USERNAME/PASSWORD are set, creates the root user
+#      idempotently (via the localhost exception). This is REQUIRED because
+#      this script replaces the official entrypoint, so the image's own
+#      root-user bootstrap never runs. When the vars are unset (dev), no user
+#      is created and Mongo stays auth-free.
+#   6. Keeps mongod in the foreground so the container stays alive.
 #
 # The replica set member host is pinned to the compose service name (`mongo`)
 # so the backend's `mongodb://mongo:27017/...?replicaSet=rs0` connection string
@@ -22,6 +27,8 @@ set -euo pipefail
 REPL_SET_NAME="${REPL_SET_NAME:-rs0}"
 HOST_NAME="${MONGO_HOST_NAME:-mongo}"
 PORT="${MONGO_PORT:-27017}"
+ROOT_USER="${MONGO_INITDB_ROOT_USERNAME:-}"
+ROOT_PASS="${MONGO_INITDB_ROOT_PASSWORD:-}"
 
 # The official image runs mongod as the `mongodb` user (uid 999). We run as
 # root here, so make sure the data volume is writable by that user first.
@@ -56,6 +63,24 @@ until mongosh --quiet --eval "rs.status().members.some(m => m.stateStr === 'PRIM
 done
 
 echo "[mongo-init] replica set '${REPL_SET_NAME}' is PRIMARY — ready"
+
+if [ -n "${ROOT_USER}" ] && [ -n "${ROOT_PASS}" ]; then
+  echo "[mongo-init] ensuring root user '${ROOT_USER}' exists (idempotent)"
+  mongosh --quiet --eval "
+    const admin = db.getSiblingDB('admin');
+    const exists = admin.getUser('${ROOT_USER}');
+    if (!exists) {
+      admin.createUser({
+        user: '${ROOT_USER}',
+        pwd: '${ROOT_PASS}',
+        roles: [{ role: 'root', db: 'admin' }],
+      });
+    }
+  "
+  echo "[mongo-init] root user ready"
+else
+  echo "[mongo-init] no root credentials set — Mongo stays auth-free (dev mode)"
+fi
 
 # Keep mongod in the foreground; if it exits, propagate its exit code.
 wait "${MONGO_PID}"
