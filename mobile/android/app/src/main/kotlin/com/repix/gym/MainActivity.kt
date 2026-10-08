@@ -1,4 +1,4 @@
-package com.example.gym_manager
+package com.repix.gym
 
 import io.flutter.embedding.android.FlutterActivity
 
