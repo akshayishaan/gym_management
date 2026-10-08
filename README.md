@@ -1,50 +1,68 @@
-# Gym Management
+# RepiX — Gym Management
 
-Mobile workspace for a multi-tenant gym management service:
+Multi-tenant gym management platform: a NestJS + MongoDB backend and a Flutter
+Android app (RepiX) for staff to manage members, plans, payments, and
+memberships.
 
-- `backend/`: standalone NestJS + TypeScript + MongoDB/Mongoose API.
-- `mobile/`: fresh Flutter starter app for **Android only**, named `gym_manager`.
+| Directory | What it is |
+| --- | --- |
+| `backend/` | NestJS + TypeScript + MongoDB/Mongoose API (Node 24.x) |
+| `mobile/` | Flutter Android app (`gym_manager`, applicationId `com.repix.gym`) |
 
-The Next.js application has been retired from the working tree. Its source and the previous Flutter implementation remain available in Git history. The new Flutter app is only a scaffold: it has no gym screens, authentication, API client, or backend integration. UI parity and production deployment readiness have not been established.
+## Features
 
-## Prerequisites
+- **Members** — profiles, soft delete, per-member ledger balance
+- **Plans** — configurable duration (days) and price per gym
+- **Plan purchase** — creates a Membership period; supports full, partial, or
+  zero payment at purchase time
+- **Dues payment** — payments applied to an outstanding balance only
+- **Void / refund** — audit-preserving cancellation of payments and plan
+  purchases (reversal restores the member's previous membership state)
+- **Gym insights** — dashboard, reports, and activity log
+- **Multi-tenancy** — staff switch between gyms; all data is gym-scoped
 
-Use Node.js **24.x** for the backend and an installed Flutter SDK for the mobile app. Android builds require the Android toolchain (Android SDK + a JDK).
+## Backend
 
-## Backend development
-
-Run these commands from the repository root, entering `backend/` before installing or starting the server:
+### Local development
 
 ```bash
 cd backend
 npm ci
-# Create your local environment file only if it does not already exist.
 test -f .env || cp .env.example .env
-```
-
-Edit `backend/.env` before starting:
-
-| Variable | Purpose |
-| --- | --- |
-| `MONGODB_URI` | External, transaction-capable MongoDB deployment; the app does not provision a local database. |
-| `MONGODB_USERNAME`, `MONGODB_PASSWORD` | Supply both together if credentials are not embedded in the URI. |
-| `JWT_SECRET`, `JWT_REFRESH_SECRET` | Configure secrets for access and refresh tokens. |
-| `REDIS_URL` | Optional Redis connection for read caching and BullMQ cache invalidation. |
-| `PORT` | Defaults to `3001`. |
-
-From `backend/`, start the development server:
-
-```bash
 npm run start:dev
 ```
 
-Nest loads `.env` from the process working directory, so use `backend/.env`, not the private environment files at the repository root.
+`npm run start:dev` starts the local Docker infrastructure (MongoDB
+single-node replica set + Redis) and then the API with hot reload — see
+`backend/DEVELOPMENT.md`. The API listens on `http://localhost:3001` (no
+`/api` prefix).
 
-The default API base URL is `http://localhost:3001`, **without an `/api` prefix**. Authentication endpoints are `/auth/signup`, `/auth/login`, and `/auth/refresh`. Protected requests use `Authorization: Bearer <accessToken>`; gym-scoped requests select the Active Gym with `X-Selected-Gym: <gymId>`. Gym settings are read and updated through `/gyms/:id`; there is no `/settings` endpoint. Consult controllers under `backend/src/` for the current route surface.
+Environment variables (see `backend/.env.example`):
 
-## Flutter development
+| Variable | Purpose |
+| --- | --- |
+| `MONGODB_URI` | Transaction-capable MongoDB connection string (replica set required for transactions) |
+| `JWT_SECRET`, `JWT_REFRESH_SECRET` | Access- and refresh-token signing secrets |
+| `REDIS_URL` | Optional Redis for read caching and BullMQ cache invalidation |
+| `PORT` | Defaults to `3001` |
 
-In a separate terminal, run from the repository root:
+### API conventions
+
+- Auth: `/auth/signup`, `/auth/login`, `/auth/refresh`; protected requests use
+  `Authorization: Bearer <accessToken>`
+- Gym scoping: `X-Selected-Gym: <gymId>` header selects the Active Gym
+- Gym settings are read and updated through `/gyms/:id` (there is no
+  `/settings` endpoint)
+- Consult the controllers under `backend/src/` for the current route surface
+
+### Type-checking
+
+```bash
+node backend/node_modules/typescript/bin/tsc \
+  --project backend/tsconfig.json --noEmit --incremental false
+```
+
+## Mobile app (RepiX)
 
 ```bash
 cd mobile
@@ -52,29 +70,32 @@ flutter pub get
 flutter run
 ```
 
-Select an Android emulator or device. The starter currently runs independently of the backend. The generated `com.example` organization is a development placeholder, not a release identifier. iOS scaffolding is not generated.
-
-## Verification
-
-With backend dependencies already installed, this command runs from the repository root without emitting build output or incremental metadata:
+The backend URL is injected at build time:
 
 ```bash
-node backend/node_modules/typescript/bin/tsc \
-  --project backend/tsconfig.json --noEmit --incremental false
+flutter run --dart-define=API_BASE=http://localhost:3001
 ```
 
-Run Flutter checks from `mobile/`:
+On the Android emulator `10.0.2.2` maps to the host machine; on a real device
+with `adb reverse tcp:3001 tcp:3001`, `localhost` works directly.
 
-```bash
-flutter analyze
-flutter test
-flutter doctor -v
-```
+## Deployment
 
-There is no configured backend test runner or lint script, and no Docker deployment or CI workflow is supplied. Type-checking and Flutter starter tests do not establish backend behavioral parity or a completed mobile product.
+Deployment is **release-driven**:
 
-## Domain and historical references
+1. A PR is merged to `main` → a **draft GitHub release** is created
+   automatically with an auto-bumped version tag (from
+   `mobile/pubspec.yaml`).
+2. Publishing the release triggers the CI pipeline, which builds the Android
+   APK (attached to the release as `repix_<tag>.apk`), builds the backend
+   Docker image for `linux/arm64`, pushes it to GHCR, and deploys it to the
+   production VM with a health check.
 
-`CONTEXT.md` defines domain terminology; `docs/adr/` records decisions about transactions, tenant integrity, and server-owned Gym-local dates. `docs/migration-plan.md` preserves the superseded migration proposal, not current implementation guarantees. `DESIGN.md` is an unrelated historical Linear design reference, not the Flutter application's design specification.
+See `docs/releases.md` for the full flow, versioning, APK signing, and
+rollback. Infrastructure setup is documented in `docs/deployment.md`.
 
-Start local development with the backend setup above or `cd mobile && flutter run` for the independent starter.
+## Architecture decisions
+
+`docs/adr/` records the decisions behind the transactional membership
+lifecycle, gym-local date handling, the NestJS/Mongoose backend, the
+cache-invalidation strategy, and server-owned date math.

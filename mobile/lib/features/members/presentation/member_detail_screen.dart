@@ -1,8 +1,7 @@
-// Phase 5 — Member detail. Mirrors the Figma trio under
-// `.planning/screenshots/phase5_figma/`:
-//   * member_detail_view.png     — Overview tab (default)
-//   * member_detail_payment.png  — Payments tab
-//   * member_detail_activity.png — History tab (plan history + Reverse Plan)
+// Phase 5 — Member detail. Three tabs:
+//   * Overview tab (default)
+//   * Payments tab
+//   * History tab (plan history + Reverse Plan)
 //
 // Identity card, quick actions row, segmented tabs, and key/value rows all
 // come straight from those references. Edit launches `MemberFormSheet`
