@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/utils/money.dart';
@@ -48,6 +49,12 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
 
   Member? _selectedMember;
   Plan? _selectedPlan;
+
+  /// Optional custom start date for a plan purchase. Null means "use the
+  /// server default" (the latest active period's end, else today). The backend
+  /// only accepts `membershipStart` alongside a plan, so this stays null for a
+  /// dues payment and the field is hidden then.
+  DateTime? _startDate;
   String _method = 'cash';
 
   bool _isSubmitting = false;
@@ -118,6 +125,7 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
         _selectedMember = selected;
         // The previous plan price doesn't carry over to a different member.
         _selectedPlan = null;
+        _startDate = null;
         _prefillDues();
       });
     }
@@ -203,10 +211,45 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
           // Pre-fill the amount with the plan price (editable).
           _amountCtrl.text = selected.plan!.price.toStringAsFixed(2);
         } else {
+          // Dues payment: a start date has no meaning, and the backend
+          // rejects it without a plan.
+          _startDate = null;
           _prefillDues();
         }
       });
     }
+  }
+
+  /// Themed date picker for the optional plan start date, within one year
+  /// either side of today (matching the member onboarding form).
+  Future<void> _pickStartDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? now,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: ColorScheme.dark(
+            primary: LatoColors.primary,
+            onPrimary: LatoColors.bgDark,
+            surface: LatoColors.surfaceDark,
+            onSurface: LatoColors.textPrimaryDark,
+          ),
+        ),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (picked != null && mounted) setState(() => _startDate = picked);
+  }
+
+  /// `YYYY-MM-DD` in the device's local date, matching the Gym-local date-only
+  /// contract the backend validates.
+  static String _isoDate(DateTime d) {
+    final mm = d.month.toString().padLeft(2, '0');
+    final dd = d.day.toString().padLeft(2, '0');
+    return '${d.year}-$mm-$dd';
   }
 
   Future<void> _submit() async {
@@ -232,6 +275,11 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
               amount: amount,
               method: _method,
               planId: _selectedPlan?.id,
+              // Only a plan purchase carries a start date; null lets the
+              // backend default it.
+              membershipStart: _selectedPlan == null || _startDate == null
+                  ? null
+                  : _isoDate(_startDate!),
               reference: _method == 'cash' || _referenceCtrl.text.trim().isEmpty
                   ? null
                   : _referenceCtrl.text.trim(),
@@ -315,6 +363,29 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
                 icon: Icons.card_membership_outlined,
                 onTap: _pickPlan,
               ),
+              const SizedBox(height: LatoSpacing.lg),
+            ],
+            // Start date (plan purchase only) — mirrors the member onboarding
+            // form. Hidden for a dues payment, which has no membership period.
+            if (plan != null) ...[
+              const _FieldLabel(text: 'Start date'),
+              const SizedBox(height: LatoSpacing.sm),
+              _PickerField(
+                hint: 'Today',
+                value: _startDate == null
+                    ? null
+                    : DateFormat('d MMM y').format(_startDate!),
+                icon: Icons.calendar_today_outlined,
+                onTap: _pickStartDate,
+              ),
+              if (_startDate != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => setState(() => _startDate = null),
+                    child: const Text('Use today'),
+                  ),
+                ),
               const SizedBox(height: LatoSpacing.lg),
             ],
             // Amount
