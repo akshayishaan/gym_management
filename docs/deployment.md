@@ -1,12 +1,17 @@
 # Deployment
 
-Continuous deployment of the NestJS backend to an Oracle Cloud Ampere A1 VM
-(ARM64 / aarch64, Ubuntu 24.04).
+Deployment of the NestJS backend to an ARM64 cloud VM (ARM64 /
+aarch64, Ubuntu 24.04).
+
+> **Deployment is now release-driven.** The backend is built and deployed when
+> a GitHub release is published — see `docs/releases.md` for the full flow,
+> versioning, APK signing, and rollback. This page documents the VM setup and
+> the deploy mechanics.
 
 ## Architecture
 
 ```
-push to main (backend/**)
+publish a GitHub release
         │
         ▼
 GitHub Actions ── build linux/arm64 image (QEMU) ──► push to GHCR
@@ -15,11 +20,12 @@ GitHub Actions ── build linux/arm64 image (QEMU) ──► push to GHCR
 SSH into VM ── git pull ── docker compose pull ── up -d ── health check
 ```
 
-1. **build-and-push** builds the backend for `linux/arm64` (the VM is Ampere
-   aarch64) using QEMU emulation on the amd64 runner, then pushes to GHCR
-   tagged `latest` **and** the commit SHA (the SHA tag enables rollback).
-2. **deploy** SSHes into the VM, pulls the latest code, pulls the new image,
-   restarts the compose stack, and polls `/health` until it returns 200.
+1. **build-backend-image** builds the backend for `linux/arm64` (the VM is
+   aarch64) using QEMU emulation on the amd64 runner, then pushes to
+   GHCR tagged `latest`, the release tag, **and** the commit SHA (the SHA tag
+   enables rollback).
+2. **deploy-backend** SSHes into the VM, pulls the latest code, pulls the new
+   image, restarts the compose stack, and polls `/health` until it returns 200.
 
 The repo is public, so Actions minutes are free and the VM can `git pull` over
 HTTPS without auth.
@@ -33,7 +39,7 @@ Configure these under **Settings → Secrets and variables → Actions → Secre
 | --- | --- |
 | `SSH_HOST` | `80.225.251.105` (the VM's reserved public IP) |
 | `SSH_USER` | `ubuntu` |
-| `SSH_PRIVATE_KEY` | Full contents of the VM's private key (`~/.ssh/oci_second_account` on your machine) |
+| `SSH_PRIVATE_KEY` | Full contents of the VM's private key (e.g. `~/.ssh/deploy_key` on your machine) |
 | `SSH_PORT` | `22` |
 | `MONGO_INITDB_ROOT_USERNAME` | Mongo root user (e.g. `admin`) |
 | `MONGO_INITDB_ROOT_PASSWORD` | Strong value, e.g. `openssl rand -hex 24` |
@@ -64,7 +70,7 @@ Run once on the VM before the first deploy:
    ```bash
    git clone https://github.com/akshayishaan/gym_management.git ~/gym_management
    ```
-3. **Confirm the OCI security list** allows inbound TCP **22** (SSH) and
+3. **Confirm the cloud firewall / security group** allows inbound TCP **22** (SSH) and
    **3001** (API). Both are already open on this VM.
 
 No `.env` file needs to be created by hand — the deploy job writes it from
@@ -72,9 +78,8 @@ GitHub secrets.
 
 ## How to trigger
 
-- **Automatic**: push to `main` touching anything under `backend/**` (or the
-  workflow file itself).
-- **Manual**: **Actions → Build and Deploy → Run workflow**.
+- **Automatic**: publish a GitHub release (see `docs/releases.md`). A draft
+  release is created automatically when a PR is merged to `main`.
 
 ## How to roll back
 

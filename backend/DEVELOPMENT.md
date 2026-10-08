@@ -77,4 +77,4 @@ its data.
 - **Port 27017 or 6379 already in use:** another MongoDB/Redis is already
   running locally. Stop it or change the published ports.
 - **"out of host capacity" errors:** not relevant here — that message comes
-  from Oracle VM, not Docker Desktop.
+  from the cloud VM, not Docker Desktop.

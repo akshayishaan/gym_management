@@ -1,0 +1,85 @@
+# =============================================================================
+# Gym Management — Draft Release on PR merge
+#
+# When a PR is merged to `main`, this workflow creates a DRAFT GitHub release
+# with an auto-bumped version tag. The user then reviews the draft and
+# publishes it, which triggers `.github/workflows/release.yml` to build the
+# APK, build the backend image, and deploy to the VM.
+#
+# Versioning:
+#   - The base version comes from `mobile/pubspec.yaml` (`version: 1.0.0+1`
+#     → base `1.0.0`, the `+build` suffix is stripped).
+#   - The highest existing `vX.Y.Z` tag is found. If `v<base>` is already
+#     taken, the patch is bumped until an unused tag is found.
+#   - To force a specific version, edit `pubspec.yaml` before merging.
+# =============================================================================
+
+name: Draft Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    # Only run when the PR was actually merged (not closed without merging).
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      # fetch-depth: 0 pulls all history + tags so we can inspect existing tags.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Determine the next version tag.
+      #   1. Read `version:` from mobile/pubspec.yaml and strip the `+build`.
+      #   2. List existing `v*` tags and bump the patch until an unused tag is
+      #      found (e.g. v1.0.0 exists → v1.0.1).
+      - name: Determine next version tag
+        id: version
+        run: |
+          base="$(sed -n 's/^version: *\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' mobile/pubspec.yaml | head -n1)"
+          if [ -z "$base" ]; then
+            echo "::error::Could not parse version from mobile/pubspec.yaml"
+            exit 1
+          fi
+
+          tag="v${base}"
+          # Bump the patch while the tag already exists.
+          while git tag -l "$tag" | grep -q .; do
+            major="${base%%.*}"
+            rest="${base#*.}"
+            minor="${rest%%.*}"
+            patch="${rest#*.}"
+            patch=$((patch + 1))
+            base="${major}.${minor}.${patch}"
+            tag="v${base}"
+          done
+
+          echo "Chosen tag: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Create the draft release. `--generate-notes` auto-fills the body from
+      # merged PRs since the last release.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --draft \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes
+
+      # Surface the tag so the user knows what to publish.
+      - name: Print tag to publish
+        run: |
+          echo "Draft release created for tag: ${{ steps.version.outputs.tag }}"
+          echo "Review and publish it at:"
+          echo "  https://github.com/${{ github.repository }}/releases"
