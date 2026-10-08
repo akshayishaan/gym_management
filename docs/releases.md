@@ -38,6 +38,18 @@ release.
 - **To set a specific version**, edit `version:` in `mobile/pubspec.yaml`
   before merging the PR.
 
+## APK backend URL
+
+The APK's backend URL is baked in at build time via
+`--dart-define=API_BASE`. The release workflow sets it to
+`http://<SSH_HOST>:3001` (reusing the `SSH_HOST` secret), so the released APK
+points at the deployed backend rather than `localhost`.
+
+> **Note:** the URL is embedded in the APK binary, so it is not secret — anyone
+> who downloads the APK can extract it. To avoid exposing the raw IP and to
+> encrypt traffic, put a domain + HTTPS reverse proxy in front of the backend
+> and point `API_BASE` at `https://<domain>` instead.
+
 ## APK signing
 
 The release APK is signed with a real keystore **only if** the Android signing
@@ -81,7 +93,7 @@ debug signing.
 
 | Secret | Purpose |
 | --- | --- |
-| `SSH_HOST` | VM public IP (e.g. `203.0.113.10`) |
+| `SSH_HOST` | VM public IP (e.g. `203.0.113.10`) — also used as the APK's backend URL (`http://<SSH_HOST>:3001`) |
 | `SSH_USER` | VM SSH user (e.g. `ubuntu`) |
 | `SSH_PRIVATE_KEY` | VM private key contents |
 | `SSH_PORT` | SSH port (e.g. `22`) |

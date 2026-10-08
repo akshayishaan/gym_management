@@ -128,9 +128,15 @@ jobs:
           fi
 
       - name: Build APK
+        env:
+          API_BASE_URL: http://${{ secrets.SSH_HOST }}:3001
         run: |
           cd mobile
-          flutter build apk --release
+          if [ -z "${{ secrets.SSH_HOST }}" ]; then
+            echo "::error::SSH_HOST secret is not set — the release APK would point at localhost and be unable to reach the backend."
+            exit 1
+          fi
+          flutter build apk --release --dart-define=API_BASE="$API_BASE_URL"
 
       - name: Rename and upload APK to release
         env:
