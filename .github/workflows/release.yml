@@ -1,0 +1,203 @@
+# =============================================================================
+# Gym Management — Release pipeline (triggered when a draft release is published)
+#
+# Flow (see docs/releases.md):
+#   1. build-backend-image — build the NestJS backend for linux/arm64 (the
+#      ARM64 cloud VM is aarch64) and push to GHCR tagged `latest`, the
+#      release tag, and the commit SHA (SHA tag enables rollback).
+#   2. build-apk — build the Flutter Android APK (release-signed if a keystore
+#      is configured, otherwise debug-signed) and attach it to the release as
+#      `repix_<tag>.apk`.
+#   3. deploy-backend — SSH into the VM, pull the new image, restart the
+#      compose stack, then poll /health until it returns 200.
+#
+# Jobs 1 and 2 run in parallel; job 3 waits for job 1.
+#
+# Required repository secrets: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, SSH_PORT,
+# MONGO_INITDB_ROOT_USERNAME, MONGO_INITDB_ROOT_PASSWORD, JWT_SECRET,
+# JWT_REFRESH_SECRET. Optional (APK signing): ANDROID_KEYSTORE_BASE64,
+# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD.
+# =============================================================================
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1 — build the ARM64 backend image and push it to GHCR.
+  # ---------------------------------------------------------------------------
+  build-backend-image:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Sanitize the release tag for use as a Docker image tag (lowercase,
+      # strip leading `v`, keep only [a-z0-9._-]).
+      - name: Derive image tag
+        id: meta
+        run: |
+          raw="${{ github.event.release.tag_name }}"
+          tag="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed 's/^v//' | tr -c 'a-z0-9._-' '-')"
+          echo "image-tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # QEMU lets buildx emulate linux/arm64 on the amd64 GitHub runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Log in to GHCR. `github.repository` is already lowercase
+      # (akshayishaan/gym_management), which GHCR requires for image names.
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          # The VM is ARM64 (aarch64) — build for linux/arm64 via QEMU.
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/backend:latest
+            ghcr.io/${{ github.repository }}/backend:${{ steps.meta.outputs.image-tag }}
+            ghcr.io/${{ github.repository }}/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Job 2 — build the Flutter Android APK and attach it to the release.
+  # ---------------------------------------------------------------------------
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          cd mobile
+          flutter pub get
+
+      # Optional release signing. If ANDROID_KEYSTORE_BASE64 is set, decode the
+      # keystore and write key.properties so Gradle signs the release APK with
+      # the real key. If unset, the build falls back to debug signing.
+      - name: Configure release signing (if keystore provided)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > mobile/android/app/keystore.jks
+            cat > mobile/android/key.properties <<EOF
+            storePassword=$ANDROID_KEYSTORE_PASSWORD
+            keyPassword=$ANDROID_KEY_PASSWORD
+            keyAlias=$ANDROID_KEY_ALIAS
+            storeFile=keystore.jks
+            EOF
+            echo "Release signing configured."
+          else
+            echo "No keystore provided — using debug signing fallback."
+          fi
+
+      - name: Build APK
+        run: |
+          cd mobile
+          flutter build apk --release
+
+      - name: Rename and upload APK to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          apk="repix_${tag}.apk"
+          cp mobile/build/app/outputs/flutter-apk/app-release.apk "$apk"
+          gh release upload "$tag" "$apk" --clobber
+
+  # ---------------------------------------------------------------------------
+  # Job 3 — SSH into the VM, pull the new image, restart, and health-check.
+  # ---------------------------------------------------------------------------
+  deploy-backend:
+    needs: build-backend-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VM
+        uses: appleboy/ssh-action@v1
+        # `envs` forwards the listed vars from the `env` block below into the
+        # remote shell, so the script can write them to .env without ever
+        # embedding secret values in the script text (which could leak in logs).
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          envs: MONGO_INITDB_ROOT_USERNAME,MONGO_INITDB_ROOT_PASSWORD,JWT_SECRET,JWT_REFRESH_SECRET
+          # Fail fast on any command error; don't mask the deploy output.
+          script: |
+            set -e
+            cd ~/gym_management/backend
+            git pull --ff-only
+
+            # Regenerate .env from GitHub secrets on every deploy so the VM
+            # holds no manually-managed secrets. `umask` keeps it 600.
+            umask 077
+            cat > .env <<EOF
+            MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME
+            MONGO_INITDB_ROOT_PASSWORD=$MONGO_INITDB_ROOT_PASSWORD
+            JWT_SECRET=$JWT_SECRET
+            JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+            EOF
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose -f docker-compose.prod.yml pull backend
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
+        env:
+          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+
+      # Poll the backend /health endpoint until it returns 200 (or time out).
+      - name: Health check
+        run: |
+          for i in $(seq 1 12); do
+            if curl -fsS "http://${{ secrets.SSH_HOST }}:3001/health"; then
+              echo "Health check passed."
+              exit 0
+            fi
+            echo "Health check attempt $i failed; retrying in 5s..."
+            sleep 5
+          done
+          echo "Health check failed after 12 attempts." >&2
+          exit 1

@@ -1,6 +1,6 @@
 # Migration Plan: Next.js + Mongoose → NestJS + Flutter (MongoDB unchanged)
 
-> **Historical / superseded — 2026-10-04.** The proposal below is retained for its original rationale, not as the current implementation contract. The working tree now contains the standalone NestJS backend in `backend/` and a fresh Android/iOS Flutter starter in `mobile/`. Next.js and the prior Flutter implementation are retained in Git history, not as working-tree rollback sources. The new starter has no authentication, API client, gym screens, or backend integration; the Riverpod/Dio/generated-client stack and UI-parity work below are historical proposals, not present features. Docker/Oracle Cloud deployment and CI plans are aspirational, not supplied infrastructure, and backend behavioral parity/production readiness have not been established. Actual Nest routes have **no `/api` prefix**; Gym settings use `/gyms/:id`, not `/settings`. For current setup and conventions, read the root `README.md` and `CLAUDE.md`, then the controllers under `backend/src/`. The original body follows unchanged.
+> **Historical / superseded — 2026-10-04.** The proposal below is retained for its original rationale, not as the current implementation contract. The working tree now contains the standalone NestJS backend in `backend/` and a fresh Android/iOS Flutter starter in `mobile/`. Next.js and the prior Flutter implementation are retained in Git history, not as working-tree rollback sources. The new starter has no authentication, API client, gym screens, or backend integration; the Riverpod/Dio/generated-client stack and UI-parity work below are historical proposals, not present features. Docker/cloud deployment and CI plans are aspirational, not supplied infrastructure, and backend behavioral parity/production readiness have not been established. Actual Nest routes have **no `/api` prefix**; Gym settings use `/gyms/:id`, not `/settings`. For current setup and conventions, read the root `README.md` and `CLAUDE.md`, then the controllers under `backend/src/`. The original body follows unchanged.
 
 ## Architecture at a glance
 
@@ -26,7 +26,7 @@ NestJS is the same language (TS), same ODM (Mongoose), same runtime as the curre
 - **Backend:** NestJS + Mongoose (TypeScript), not Django (see ADR-0003).
 - **Auth:** `@nestjs/jwt` + passport. Access token (`{sub, role}` only) + rotating refresh token. `gymIds` are hydrated server-side per request, never stored in the token.
 - **Flutter data layer:** Riverpod + dio, with a cached-query pattern mirroring TanStack Query.
-- **Deployment:** Oracle Cloud Free Tier (Ampere A1 ARM, up to 4 OCPU / 24GB RAM), Docker Compose, MongoDB stays on Atlas.
+- **Deployment:** Cloud VM (ARM, up to 4 OCPU / 24GB RAM), Docker Compose, MongoDB stays on Atlas.
 - Additive schema changes are allowed; existing data and business logic stay untouched.
 - Refresh token: a `refreshTokenHash` + `refreshTokenExpiresAt` field on the existing `Staff` doc (not a separate collection). Single active refresh token per staff — fine for a mobile, single-device admin app.
 - BullMQ scope: cache invalidation only (see ADR-0004). ActivityLog stays synchronous in-transaction. Expiry reminders deferred to a future feature.
@@ -113,9 +113,9 @@ Goals: pixel-consistent UI, same interactions, "app-canvas → app-screen" feel,
    - `GymSettingsProvider` equivalent: `switchGym()` persists selected gym, invalidates scoped providers, dirty-form guard dialog.
 5. Offline/snappiness: cached list + optimistic updates, pull-to-refresh, skeleton loaders, preload adjacent screens.
 
-## Phase 6 — Deployment (Oracle Cloud Free Tier)
+## Phase 6 — Deployment (Cloud VM)
 
-1. One Ampere A1 instance (up to 4 OCPU / 24GB RAM, ARM64), Ubuntu 24.04.
+1. One ARM64 instance (up to 4 OCPU / 24GB RAM, ARM64), Ubuntu 24.04.
 2. Docker Compose stack:
    - `nginx` (or Caddy, auto-TLS via Let's Encrypt) as reverse proxy / TLS.
    - `backend` (NestJS, multi-stage Node 24 image, ARM-compatible) behind `pm2` or `node --cluster`.

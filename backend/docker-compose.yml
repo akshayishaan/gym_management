@@ -1,7 +1,7 @@
 # =============================================================================
 # Gym Management — self-hosted backend stack
 #
-# Target: a single Oracle Cloud Ampere A1 VM (ARM64 / aarch64, Ubuntu,
+# Target: a single ARM64 cloud VM (ARM64 / aarch64, Ubuntu,
 # 2 OCPU / 12 GB RAM). All three services run in one compose project on that
 # one VM. Only port 3001 is exposed to the host (the VM security list already
 # allows 22 + 3001); Mongo and Redis stay internal to the compose network.
