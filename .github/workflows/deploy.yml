@@ -11,6 +11,10 @@
 # The repo is PUBLIC, so GitHub Actions minutes are free and the VM can `git
 # pull` the repo over HTTPS without auth. GHCR images for a public repo are
 # anonymously pullable, but we still log in to avoid anonymous rate limits.
+#
+# Required repository secrets: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, SSH_PORT,
+# MONGO_INITDB_ROOT_USERNAME, MONGO_INITDB_ROOT_PASSWORD, JWT_SECRET,
+# JWT_REFRESH_SECRET. See docs/deployment.md.
 # =============================================================================
 
 name: Build and Deploy
