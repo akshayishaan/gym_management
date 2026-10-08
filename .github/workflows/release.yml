@@ -174,9 +174,15 @@ jobs:
             # Regenerate .env from GitHub secrets on every deploy so the VM
             # holds no manually-managed secrets. `umask` keeps it 600.
             umask 077
+            # URL-encode the Mongo password before embedding it in the URI:
+            # reserved characters (e.g. `@`) would otherwise be parsed as the
+            # host separator and break the connection. The raw password is
+            # still written for the mongo container to create the user.
+            ENCODED_MONGO_PW="$(python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["MONGO_INITDB_ROOT_PASSWORD"], safe=""))')"
             cat > .env <<EOF
             MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME
             MONGO_INITDB_ROOT_PASSWORD=$MONGO_INITDB_ROOT_PASSWORD
+            MONGODB_URI=mongodb://$MONGO_INITDB_ROOT_USERNAME:$ENCODED_MONGO_PW@mongo:27017/gym_management?authSource=admin&replicaSet=rs0
             JWT_SECRET=$JWT_SECRET
             JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
             EOF
