@@ -12,6 +12,7 @@ import 'payment.dart';
 class PaymentListQuery {
   const PaymentListQuery({
     this.month,
+    this.status,
     this.page = 1,
     this.limit = 50,
   });
@@ -20,16 +21,21 @@ class PaymentListQuery {
   /// `payment.service.ts`. Null means "no month filter".
   final String? month;
 
+  /// `paid` | `voided` | `refunded`; null means every status.
+  final String? status;
+
   final int page;
   final int limit;
 
   PaymentListQuery copyWith({
     Object? month = _kSentinel,
+    Object? status = _kSentinel,
     int? page,
     int? limit,
   }) {
     return PaymentListQuery(
       month: identical(month, _kSentinel) ? this.month : month as String?,
+      status: identical(status, _kSentinel) ? this.status : status as String?,
       page: page ?? this.page,
       limit: limit ?? this.limit,
     );
@@ -40,12 +46,13 @@ class PaymentListQuery {
     if (identical(this, other)) return true;
     return other is PaymentListQuery &&
         other.month == month &&
+        other.status == status &&
         other.page == page &&
         other.limit == limit;
   }
 
   @override
-  int get hashCode => Object.hash(month, page, limit);
+  int get hashCode => Object.hash(month, status, page, limit);
 }
 
 /// Result envelope for the paginated `GET /payments` response. The

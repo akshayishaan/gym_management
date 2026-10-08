@@ -28,14 +28,14 @@ class PlanCreateInput {
   final bool isActive;
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        if (description != null && description!.isNotEmpty)
-          'description': description,
-        'durationDays': durationDays,
-        'price': price,
-        if (features != null) 'features': features,
-        'isActive': isActive,
-      };
+    'name': name,
+    if (description != null && description!.isNotEmpty)
+      'description': description,
+    'durationDays': durationDays,
+    'price': price,
+    if (features != null) 'features': features,
+    'isActive': isActive,
+  };
 }
 
 /// Plain Dart transport shape for `PUT /plans/:id`. Mirrors
@@ -58,13 +58,13 @@ class PlanUpdateInput {
   final bool? isActive;
 
   Map<String, dynamic> toJson() => {
-        if (name != null) 'name': name,
-        if (description != null) 'description': description,
-        if (durationDays != null) 'durationDays': durationDays,
-        if (price != null) 'price': price,
-        if (features != null) 'features': features,
-        if (isActive != null) 'isActive': isActive,
-      };
+    if (name != null) 'name': name,
+    if (description != null) 'description': description,
+    if (durationDays != null) 'durationDays': durationDays,
+    if (price != null) 'price': price,
+    if (features != null) 'features': features,
+    if (isActive != null) 'isActive': isActive,
+  };
 }
 
 /// Network access for the Plans feature. Routes live in
@@ -104,6 +104,11 @@ class PlanRepository {
           total: (data['total'] as num?)?.toInt() ?? list.length,
           page: (data['page'] as num?)?.toInt() ?? query.page,
           limit: (data['limit'] as num?)?.toInt() ?? query.limit,
+          counts: data['counts'] is Map
+              ? PlanCounts.fromJson(
+                  (data['counts'] as Map).cast<String, dynamic>(),
+                )
+              : null,
           summary: data['summary'] is Map
               ? PlansSummary.fromJson(
                   (data['summary'] as Map).cast<String, dynamic>(),
@@ -166,10 +171,8 @@ final planRepositoryProvider = Provider<PlanRepository>((ref) {
 /// gym changes so switching tenants refreshes the data. Pass
 /// `includeStats: true` (default in the repository) so the KPI card and
 /// per-plan stat columns can render.
-final planListProvider =
-    FutureProvider.autoDispose.family<PlansResponse, PlanListQuery>(
-  (ref, query) {
-    ref.watch(activeGymProvider);
-    return ref.watch(planRepositoryProvider).getPlans(query);
-  },
-);
+final planListProvider = FutureProvider.autoDispose
+    .family<PlansResponse, PlanListQuery>((ref, query) {
+      ref.watch(activeGymProvider);
+      return ref.watch(planRepositoryProvider).getPlans(query);
+    });

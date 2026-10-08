@@ -6,6 +6,7 @@ export {
   toDateOnly,
   todayInTimeZone,
   addCalendarDays,
+  sameDayPreviousMonth,
   calendarDaysBetween,
   calculateMembershipExpiry,
   membershipStatus,

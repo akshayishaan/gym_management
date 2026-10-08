@@ -33,17 +33,16 @@ class PaymentRecordController
   Future<Payment> record(PaymentCreateInput input) async {
     state = const PaymentMutationState(loading: true);
     try {
-      final envelope =
-          await ref.read(paymentRepositoryProvider).recordPayment(input);
+      final envelope = await ref
+          .read(paymentRepositoryProvider)
+          .recordPayment(input);
       final paymentJson = envelope['payment'];
       if (paymentJson is! Map) {
         throw StateError(
           'recordPayment: missing payment in lifecycle envelope',
         );
       }
-      final payment = Payment.fromJson(
-        (paymentJson).cast<String, dynamic>(),
-      );
+      final payment = Payment.fromJson((paymentJson).cast<String, dynamic>());
       ref.invalidate(paymentListProvider);
       // Cached `dueAmount` on the member changes when a payment (plan
       // purchase or dues) commits, so any visible member list rows need a
@@ -69,24 +68,22 @@ class PaymentRecordController
 
 final paymentRecordControllerProvider =
     AutoDisposeNotifierProvider<PaymentRecordController, PaymentMutationState>(
-  PaymentRecordController.new,
-);
+      PaymentRecordController.new,
+    );
 
 /// `POST /payments/:id/void`. Voids a paid payment (audit preserved).
 /// On success, invalidates the payments list and the detail provider so
 /// the row reflects its new `voided` state immediately.
-class PaymentVoidController
-    extends AutoDisposeNotifier<PaymentMutationState> {
+class PaymentVoidController extends AutoDisposeNotifier<PaymentMutationState> {
   @override
   PaymentMutationState build() => const PaymentMutationState();
 
   Future<void> voidPayment(String id, {String? reason}) async {
     state = const PaymentMutationState(loading: true);
     try {
-      await ref.read(paymentRepositoryProvider).voidPayment(
-            id,
-            PaymentActionInput(reason: reason),
-          );
+      await ref
+          .read(paymentRepositoryProvider)
+          .voidPayment(id, PaymentActionInput(reason: reason));
       ref.invalidate(paymentListProvider);
       ref.invalidate(paymentDetailProvider(id));
       // Voids don't touch cached Member aggregates — leave the member
@@ -101,8 +98,8 @@ class PaymentVoidController
 
 final paymentVoidControllerProvider =
     AutoDisposeNotifierProvider<PaymentVoidController, PaymentMutationState>(
-  PaymentVoidController.new,
-);
+      PaymentVoidController.new,
+    );
 
 /// `POST /payments/:id/refund`. Refunds a paid payment (audit preserved,
 /// contributes negative cash movement at the refund timestamp). Same
@@ -115,10 +112,9 @@ class PaymentRefundController
   Future<void> refund(String id, {String? reason}) async {
     state = const PaymentMutationState(loading: true);
     try {
-      await ref.read(paymentRepositoryProvider).refundPayment(
-            id,
-            PaymentActionInput(reason: reason),
-          );
+      await ref
+          .read(paymentRepositoryProvider)
+          .refundPayment(id, PaymentActionInput(reason: reason));
       ref.invalidate(paymentListProvider);
       ref.invalidate(paymentDetailProvider(id));
       state = const PaymentMutationState();
@@ -131,5 +127,5 @@ class PaymentRefundController
 
 final paymentRefundControllerProvider =
     AutoDisposeNotifierProvider<PaymentRefundController, PaymentMutationState>(
-  PaymentRefundController.new,
-);
+      PaymentRefundController.new,
+    );

@@ -55,26 +55,26 @@ class LatoStatusChip extends StatelessWidget {
   _ChipColors _resolve(LatoChipTone tone) {
     switch (tone) {
       case LatoChipTone.success:
-        return const _ChipColors(
-          bg: Color(0x3300C853),
+        return _ChipColors(
+          bg: LatoColors.tint(LatoColors.success),
           fg: LatoColors.success,
           border: LatoColors.success,
         );
       case LatoChipTone.warning:
-        return const _ChipColors(
-          bg: Color(0x33FB923C),
+        return _ChipColors(
+          bg: LatoColors.tint(LatoColors.warning),
           fg: LatoColors.warning,
           border: LatoColors.warning,
         );
       case LatoChipTone.error:
-        return const _ChipColors(
-          bg: Color(0x33EF4444),
+        return _ChipColors(
+          bg: LatoColors.tint(LatoColors.error),
           fg: LatoColors.error,
           border: LatoColors.error,
         );
       case LatoChipTone.primary:
-        return const _ChipColors(
-          bg: Color(0x33C5F23F),
+        return _ChipColors(
+          bg: LatoColors.tint(LatoColors.primary),
           fg: LatoColors.primary,
           border: LatoColors.primary,
         );

@@ -44,16 +44,16 @@ class Gym {
   }
 
   Map<String, dynamic> toJson() => {
-        '_id': id,
-        'name': name,
-        if (logo != null) 'logo': logo,
-        'primaryColor': primaryColor,
-        if (address != null) 'address': address,
-        if (phone != null) 'phone': phone,
-        if (email != null) 'email': email,
-        'currency': currency,
-        'timezone': timezone,
-        'expiryReminderDays': expiryReminderDays,
-        'isActive': isActive,
-      };
+    '_id': id,
+    'name': name,
+    if (logo != null) 'logo': logo,
+    'primaryColor': primaryColor,
+    if (address != null) 'address': address,
+    if (phone != null) 'phone': phone,
+    if (email != null) 'email': email,
+    'currency': currency,
+    'timezone': timezone,
+    'expiryReminderDays': expiryReminderDays,
+    'isActive': isActive,
+  };
 }

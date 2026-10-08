@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../design/components/lato_card.dart';
 import '../../../design/spacing.dart';
 import '../domain/activity_log.dart';
 import 'activity_styles.dart';
 
-/// Single event card. Layout: avatar + 2-line name/entity + custom status
-/// pill on the right (header), then SemiBold title, then body copy, then
-/// a footer with time + ID, all with a vertical rail + colored node marker
-/// hugging the left edge.
+/// Single event card. Layout: avatar + staff name with time and short id +
+/// action pill (header), then a plain-words title and the explanatory body,
+/// with a vertical rail + colored node marker hugging the left edge.
 class ActivityEventCard extends StatelessWidget {
   const ActivityEventCard({super.key, required this.log});
   final ActivityLog log;
@@ -17,102 +15,76 @@ class ActivityEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = log.colors;
-    final timestamp = log.createdAt;
-    final timeLabel =
-        timestamp != null ? DateFormat.jm().format(timestamp.toLocal()) : '—';
-    final idLabel = 'ID: ${log.entityId ?? log.id}';
-    final title = _buildTitle(log);
     final body = log.details ?? '';
 
     return Semantics(
-      label: '${log.action} ${log.entity}',
+      label: log.title,
       child: Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Vertical rail behind the card. left: 11 keeps it aligned with
-        // the center of the 22x22 node marker.
-        Positioned(
-          left: 11,
-          top: 8,
-          bottom: 8.5,
-          child: Container(width: 2, color: Alog.rail),
-        ),
-        // Card
-        Padding(
-          padding: const EdgeInsets.only(left: 24),
-          child: LatoCard(
-            padding: const EdgeInsets.all(17),
-            borderColor: Alog.cardBorder,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header row: avatar + 2-line name/entity + status pill
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AlogAvatar(
-                      initials: _initials(log.staffName),
-                      color: colors.fg,
-                    ),
-                    const SizedBox(width: LatoSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            log.staffName,
-                            style: Alog.staffName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            log.entity,
-                            style: Alog.sage12,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+        clipBehavior: Clip.none,
+        children: [
+          // Vertical rail behind the card. left: 11 keeps it aligned with
+          // the center of the 22x22 node marker.
+          Positioned(
+            left: 11,
+            top: 8,
+            bottom: 8.5,
+            child: Container(width: 2, color: Alog.rail),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: LatoCard(
+              padding: const EdgeInsets.all(17),
+              borderColor: Alog.cardBorder,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Who did it, when, and what kind of change.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AlogAvatar(
+                        initials: _initials(log.staffName),
+                        color: colors.fg,
                       ),
-                    ),
-                    const SizedBox(width: LatoSpacing.sm),
-                    AlogStatusPill(label: log.label, colors: colors),
+                      const SizedBox(width: LatoSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              log.staffName,
+                              style: Alog.staffName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${log.timeLabel} \u00b7 #${log.shortId}',
+                              style: Alog.sage12,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: LatoSpacing.sm),
+                      AlogStatusPill(label: log.label, colors: colors),
+                    ],
+                  ),
+                  const SizedBox(height: LatoSpacing.md),
+                  Text(log.title, style: Alog.cardTitle),
+                  if (body.isNotEmpty) ...[
+                    const SizedBox(height: LatoSpacing.xs),
+                    Text(body, style: Alog.bodyCopy),
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(title, style: Alog.cardTitle),
-                if (body.isNotEmpty) ...[
-                  const SizedBox(height: LatoSpacing.xs),
-                  Text(body, style: Alog.bodyCopy),
                 ],
-                const SizedBox(height: LatoSpacing.md),
-                Container(height: 1, color: const Color(0x99262a31)),
-                const SizedBox(height: LatoSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(child: Text(timeLabel, style: Alog.sage13)),
-                    Text(idLabel, style: Alog.sage13),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-        Positioned(left: 0, top: 14, child: AlogNodeMarker(color: colors.fg)),
-      ],
-    ),
+          Positioned(left: 0, top: 14, child: AlogNodeMarker(color: colors.fg)),
+        ],
+      ),
     );
-  }
-
-  /// SemiBold title: `<Entity> #<entityId>` when an ID exists, else a
-  /// capitalized entity name. Used as the card's primary heading.
-  String _buildTitle(ActivityLog log) {
-    final id = log.entityId;
-    final cap = log.entity.isEmpty
-        ? 'Record'
-        : log.entity[0].toUpperCase() + log.entity.substring(1);
-    if (id != null && id.isNotEmpty) return '$cap #$id';
-    return cap;
   }
 
   /// First letter of first + last name, max 2 chars. Falls back to "?".
@@ -164,11 +136,7 @@ class AlogNodeMarker extends StatelessWidget {
 /// `colors` triple from the [ActivityLog] model so each action gets its
 /// own palette.
 class AlogStatusPill extends StatelessWidget {
-  const AlogStatusPill({
-    super.key,
-    required this.label,
-    required this.colors,
-  });
+  const AlogStatusPill({super.key, required this.label, required this.colors});
   final String label;
   final ({Color bg, Color fg, Color border}) colors;
 
@@ -196,11 +164,7 @@ class AlogStatusPill extends StatelessWidget {
 
 /// Square 28x28 avatar with bold initials tinted in the action's color.
 class AlogAvatar extends StatelessWidget {
-  const AlogAvatar({
-    super.key,
-    required this.initials,
-    required this.color,
-  });
+  const AlogAvatar({super.key, required this.initials, required this.color});
   final String initials;
   final Color color;
 

@@ -4,40 +4,51 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
+import '../../../design/components/lato_status_chip.dart';
+import '../../../design/spacing.dart';
 import '../domain/report.dart';
 
-// --- Brand tokens used inside the Reports feature ---
-const Color kReportSurface = Color(0xFF181C22);
-const Color kReportSurfaceAlt = Color(0xFF1C2026);
-const Color kReportSurfaceSelected = Color(0xFF262A31);
-const Color kReportBorder = Color(0xFF31353C);
-const Color kReportBorderStrong = Color(0xB331353C);
-const Color kReportSage = Color(0xFFC4C9AC);
-const Color kReportSageDim = Color(0xFF8E9379);
-const Color kReportLime = Color(0xFFC3F400);
-const Color kReportLimeDark = Color(0xFF556D00);
-const Color kReportLimeSelectedBorder = Color(0x4DC3F400);
-const Color kReportLimeSoftBg = Color(0x1AC3F400);
-const Color kReportPeach = Color(0xFFFFB59C);
-const Color kReportPeachSoftBg = Color(0x1AFFB59C);
-const Color kReportPeachBorder = Color(0x4DFFB59C);
-const Color kReportPeachAccentSoft = Color(0x26FF5708);
-const Color kReportCyan = Color(0xFF7DF4FF);
-const Color kReportCyan2 = Color(0xFF00DBE9);
-const Color kReportGray = Color(0xFF31353C);
-const Color kReportBgd = Color(0xFF0A0E14);
+/// `₹1,800` for whole rupees, `₹1,800.50` otherwise. Indian grouping.
+String reportMoney(num v) => formatInr(v, decimals: v % 1 == 0 ? 0 : 2);
 
-final NumberFormat kReportCurrency = NumberFormat.currency(
-  locale: 'en_US',
-  symbol: r'$',
-  decimalDigits: 2,
+/// Compact rupee label for chart badges: `₹950`, `₹3.8k`, `₹1.2L`, `₹2.5Cr`.
+String reportCompactMoney(num v) {
+  String trim(double x) {
+    final s = x.toStringAsFixed(1);
+    return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;
+  }
+
+  if (v >= 10000000) return '₹${trim(v / 10000000)}Cr';
+  if (v >= 100000) return '₹${trim(v / 100000)}L';
+  if (v >= 1000) return '₹${trim(v / 1000)}k';
+  return reportMoney(v);
+}
+
+String _count(int n) => NumberFormat.decimalPattern('en_IN').format(n);
+
+String _plural(int n, String one, String many) => n == 1 ? one : many;
+
+const _cardRadius = 12.0;
+
+BoxDecoration _cardDecoration() => BoxDecoration(
+  color: LatoColors.surfaceDark,
+  borderRadius: BorderRadius.circular(_cardRadius),
+  border: Border.all(color: LatoColors.borderDark),
 );
 
-String reportKFormat(double v) {
-  if (v >= 1000) return '\$${(v / 1000).toStringAsFixed(1)}k';
-  return kReportCurrency.format(v);
-}
+const _sectionTitle = TextStyle(
+  color: LatoColors.textPrimaryDark,
+  fontSize: 15,
+  fontWeight: FontWeight.w700,
+);
+
+const _caption = TextStyle(
+  color: LatoColors.textSecondaryDark,
+  fontSize: 11,
+  fontWeight: FontWeight.w400,
+);
 
 // =================================================================
 // Year selector
@@ -47,25 +58,34 @@ class ReportsYearSelector extends StatelessWidget {
     super.key,
     required this.year,
     required this.onSelect,
+    this.currentYear,
   });
+
+  /// Selected year.
   final int year;
   final ValueChanged<int> onSelect;
 
+  /// Most recent year offered (defaults to this year). The selector shows it
+  /// and the two years before it; there is no data for the future.
+  final int? currentYear;
+
   @override
   Widget build(BuildContext context) {
+    final latest = currentYear ?? DateTime.now().year;
+    final years = [latest - 2, latest - 1, latest];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
-            color: kReportBgd,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kReportBorder),
+            color: LatoColors.bgDark,
+            borderRadius: BorderRadius.circular(_cardRadius),
+            border: Border.all(color: LatoColors.borderDark),
           ),
           child: Row(
             children: [
-              for (final y in [year - 1, year, year + 1])
+              for (final y in years)
                 Expanded(
                   child: _YearButton(
                     label: '$y',
@@ -76,7 +96,7 @@ class ReportsYearSelector extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: LatoSpacing.xs),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
@@ -84,17 +104,10 @@ class ReportsYearSelector extends StatelessWidget {
               const Icon(
                 Icons.calendar_today,
                 size: 11,
-                color: kReportSageDim,
+                color: LatoColors.textSecondaryDark,
               ),
               const SizedBox(width: 4),
-              Text(
-                'Jan 1 – Dec 31, $year',
-                style: const TextStyle(
-                  color: kReportSageDim,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
+              Text('1 Jan – 31 Dec $year', style: _caption),
             ],
           ),
         ),
@@ -115,37 +128,35 @@ class _YearButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? kReportSurfaceSelected : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: selected
-                ? Border.all(color: kReportLimeSelectedBorder)
-                : Border.all(color: Colors.transparent),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      blurRadius: 1,
-                      offset: const Offset(0, 1),
-                      color: Colors.black.withValues(alpha: 0.05),
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? kReportLime : kReportSage,
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: selected ? LatoColors.surfaceRaisedDark : null,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected
+                    ? LatoColors.primary.withValues(alpha: 0.3)
+                    : Colors.transparent,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? LatoColors.primary
+                    : LatoColors.textSecondaryDark,
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -158,29 +169,16 @@ class _YearButton extends StatelessWidget {
 // Annual revenue hero card
 // =================================================================
 class ReportsRevenueHeroCard extends StatelessWidget {
-  const ReportsRevenueHeroCard({
-    super.key,
-    required this.summary,
-  });
+  const ReportsRevenueHeroCard({super.key, required this.summary});
   final ReportSummary summary;
 
   @override
   Widget build(BuildContext context) {
+    final revenue = summary.revenue.value;
+    final decimals = ((revenue - revenue.truncate()).abs() * 100).round();
     return Container(
       clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: kReportSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kReportBorder),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 50,
-            offset: Offset(0, 25),
-            spreadRadius: -12,
-            color: Colors.black26,
-          ),
-        ],
-      ),
+      decoration: _cardDecoration(),
       child: Stack(
         children: [
           Positioned(
@@ -189,61 +187,77 @@ class ReportsRevenueHeroCard extends StatelessWidget {
             right: 0,
             child: Container(
               height: 4,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Color(0xFFC5F23F),
-                    Color(0xFFABD600),
-                    Color(0x00ABD600),
+                    LatoColors.primary,
+                    LatoColors.primary.withValues(alpha: 0.4),
+                    LatoColors.primary.withValues(alpha: 0),
                   ],
-                  stops: [0.0, 0.5, 1.0],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(17, 17, 17, 17),
+            padding: const EdgeInsets.all(17),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'ANNUAL REVENUE COLLECTED',
                   style: TextStyle(
-                    color: kReportSageDim,
+                    color: LatoColors.textSecondaryDark,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.55,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  kReportCurrency.format(summary.revenue.value),
-                  style: const TextStyle(
-                    color: LatoColors.textPrimaryDark,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.6,
+                const SizedBox(height: LatoSpacing.xs),
+                // Same treatment as the Payments total: big rupees, small paise.
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '₹${formatInrWhole(revenue.truncate())}',
+                        style: const TextStyle(
+                          color: LatoColors.textPrimaryDark,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      TextSpan(
+                        text: '.${decimals.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
+                          color: LatoColors.textSecondaryDark,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Container(height: 1, color: kReportBorder),
+                const SizedBox(height: LatoSpacing.sm),
+                Container(height: 1, color: LatoColors.borderDark),
                 const SizedBox(height: 11),
                 Row(
                   children: [
                     Expanded(
                       child: _HeroSub(
                         label: 'Active Members',
-                        value: NumberFormat.decimalPattern()
-                            .format(summary.activeMembers),
-                        valueColor: const Color(0xFFDFE2EB),
+                        value: _count(summary.activeMembers),
+                        valueColor: LatoColors.textPrimaryDark,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: LatoSpacing.sm),
                     Expanded(
                       child: _HeroSub(
                         label: 'Outstanding Dues',
-                        value: kReportCurrency.format(summary.outstandingDues),
-                        valueColor: kReportPeach,
+                        value: reportMoney(summary.outstandingDues),
+                        valueColor: summary.outstandingDues > 0
+                            ? LatoColors.error
+                            : LatoColors.textPrimaryDark,
                       ),
                     ),
                   ],
@@ -272,21 +286,14 @@ class _HeroSub extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: kReportSurfaceAlt,
+        color: LatoColors.surfaceRaisedDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kReportBorderStrong),
+        border: Border.all(color: LatoColors.borderDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: kReportSage,
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
+          Text(label, style: _caption),
           const SizedBox(height: 2),
           Text(
             value,
@@ -319,41 +326,38 @@ class ReportsMetricGrid extends StatelessWidget {
               child: _MetricCard(
                 label: 'Total Transactions',
                 icon: Icons.trending_up,
-                value: NumberFormat.decimalPattern()
-                    .format(summary.transactions.value),
+                value: _count(summary.transactions.value.round()),
                 delta: summary.transactions.changePercentLabel,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: LatoSpacing.sm),
             Expanded(
               child: _MetricCard(
                 label: 'New Members',
                 icon: Icons.person_add_outlined,
-                value: NumberFormat.decimalPattern()
-                    .format(summary.newMembers.value),
+                value: _count(summary.newMembers.value.round()),
                 delta: summary.newMembers.changePercentLabel,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: LatoSpacing.sm),
         Row(
           children: [
             Expanded(
               child: _MetricCard(
                 label: 'Renewals',
                 icon: Icons.refresh,
-                value: NumberFormat.decimalPattern()
-                    .format(summary.renewals.value),
+                value: _count(summary.renewals.value.round()),
                 delta: summary.renewals.changePercentLabel,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: LatoSpacing.sm),
             Expanded(
               child: _MetricCard(
-                label: 'Members w/ Dues',
+                label: 'Members with dues',
                 icon: Icons.account_balance_wallet_outlined,
-                value: NumberFormat.decimalPattern().format(summary.dueMembers),
+                value: _count(summary.dueMembers),
                 delta: null,
               ),
             ),
@@ -380,12 +384,8 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 98,
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: kReportSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kReportBorder),
-      ),
+      padding: const EdgeInsets.all(LatoSpacing.md),
+      decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -393,15 +393,16 @@ class _MetricCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: kReportSageDim,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _caption.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
-              Icon(icon, size: 14, color: kReportSageDim),
+              const SizedBox(width: 4),
+              Icon(icon, size: 14, color: LatoColors.textSecondaryDark),
             ],
           ),
           Row(
@@ -425,44 +426,26 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
+/// Change-versus-last-year badge. Renders nothing when there is no earlier
+/// year to compare with (the label is the em-dash placeholder).
 class ReportsKpiDeltaPill extends StatelessWidget {
   const ReportsKpiDeltaPill({super.key, required this.label});
   final String label;
 
   @override
   Widget build(BuildContext context) {
-    final isZero = label == '0.0%' || label == '—';
-    final isNegative = !isZero && label.startsWith('-');
-    final bg = isZero
-        ? kReportLimeSoftBg
-        : isNegative
-            ? kReportPeachSoftBg
-            : kReportLimeSoftBg;
-    final fg = isZero
-        ? kReportLime
-        : isNegative
-            ? kReportPeach
-            : kReportLime;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
+    if (label == '—') return const SizedBox.shrink();
+    final tone = label == '0.0%'
+        ? LatoChipTone.neutral
+        : label.startsWith('-')
+        ? LatoChipTone.error
+        : LatoChipTone.success;
+    return LatoStatusChip(label: label, tone: tone);
   }
 }
 
 // =================================================================
-// 12-Month Performance Trend
+// Monthly trend
 // =================================================================
 class ReportsTrendCard extends StatelessWidget {
   const ReportsTrendCard({
@@ -477,59 +460,52 @@ class ReportsTrendCard extends StatelessWidget {
   final String trendMode;
   final ValueChanged<String> onToggle;
 
+  double _valueFor(ReportSeriesPoint p) =>
+      trendMode == 'revenue' ? p.revenue.toDouble() : p.newMembers.toDouble();
+
+  /// Month with the highest value for the selected mode, or null when every
+  /// month is zero.
+  ReportSeriesPoint? get _peak {
+    ReportSeriesPoint? best;
+    for (final p in series) {
+      if (_valueFor(p) <= 0) continue;
+      if (best == null || _valueFor(p) > _valueFor(best)) best = p;
+    }
+    return best;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final peak = _peak;
     return Container(
       padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: kReportSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kReportBorder),
-      ),
+      decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '12-Month Performance\nTrend',
-                      style: TextStyle(
-                        color: LatoColors.textPrimaryDark,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        height: 1.33,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Annual trajectory overview',
-                      style: TextStyle(
-                        color: kReportSage,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
+                child: Text('Monthly trend', style: _sectionTitle),
               ),
-              const SizedBox(width: 12),
               _TrendModeSwitch(mode: trendMode, onToggle: onToggle),
             ],
           ),
-          const SizedBox(height: 8),
-          if (bestMonth != null) _PeakCallout(bestMonth: bestMonth!),
-          if (bestMonth != null) const SizedBox(height: 8),
+          const SizedBox(height: LatoSpacing.md),
+          if (peak != null) ...[
+            _PeakCallout(
+              monthName: DateFormat.MMMM().format(DateTime(0, peak.month)),
+              revenueMode: trendMode == 'revenue',
+              value: _valueFor(peak),
+            ),
+            const SizedBox(height: LatoSpacing.sm),
+          ],
           SizedBox(
             height: 180,
             child: _BarChart(
               series: series,
               mode: trendMode,
-              bestMonth: bestMonth,
+              peakMonth: peak?.month,
             ),
           ),
         ],
@@ -548,9 +524,9 @@ class _TrendModeSwitch extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: kReportSurfaceAlt,
+        color: LatoColors.surfaceRaisedDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kReportBorder),
+        border: Border.all(color: LatoColors.borderDark),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -583,23 +559,31 @@ class _SwitchSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: selected ? kReportLime : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? kReportLimeDark : kReportSage,
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? LatoColors.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? LatoColors.bgDark
+                    : LatoColors.textSecondaryDark,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ),
         ),
@@ -609,48 +593,60 @@ class _SwitchSegment extends StatelessWidget {
 }
 
 class _PeakCallout extends StatelessWidget {
-  const _PeakCallout({required this.bestMonth});
-  final ReportBestMonth bestMonth;
+  const _PeakCallout({
+    required this.monthName,
+    required this.revenueMode,
+    required this.value,
+  });
+  final String monthName;
+  final bool revenueMode;
+  final double value;
 
   @override
   Widget build(BuildContext context) {
-    final monthName = DateFormat.MMMM().format(DateTime(0, bestMonth.month));
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 11),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 11),
       decoration: BoxDecoration(
-        color: kReportSurfaceSelected,
+        color: LatoColors.surfaceRaisedDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: kReportBorder),
+        border: Border.all(color: LatoColors.borderDark),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: kReportLime,
-                  shape: BoxShape.circle,
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: LatoColors.primary,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Peak Volume: $monthName',
-                style: const TextStyle(
-                  color: LatoColors.textPrimaryDark,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    revenueMode
+                        ? 'Peak Volume: $monthName'
+                        : 'Most new members: $monthName',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: LatoColors.textPrimaryDark,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Text(
-            kReportCurrency.format(bestMonth.revenue),
+            revenueMode ? reportMoney(value) : _count(value.round()),
             style: const TextStyle(
-              color: kReportLime,
+              color: LatoColors.primary,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -665,34 +661,30 @@ class _BarChart extends StatelessWidget {
   const _BarChart({
     required this.series,
     required this.mode,
-    required this.bestMonth,
+    required this.peakMonth,
   });
   final List<ReportSeriesPoint> series;
   final String mode;
-  final ReportBestMonth? bestMonth;
+  final int? peakMonth;
 
-  double _valueFor(ReportSeriesPoint p) {
-    return mode == 'revenue' ? p.revenue.toDouble() : p.newMembers.toDouble();
-  }
+  double _valueFor(ReportSeriesPoint p) =>
+      mode == 'revenue' ? p.revenue.toDouble() : p.newMembers.toDouble();
 
-  String _formatLabel(double value) {
-    if (mode == 'revenue') {
-      if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
-      return value.toStringAsFixed(0);
-    }
-    return value.toStringAsFixed(0);
-  }
+  String _badge(double value) =>
+      mode == 'revenue' ? reportCompactMoney(value) : _count(value.round());
 
   @override
   Widget build(BuildContext context) {
     if (series.isEmpty) return const SizedBox.shrink();
-    final maxVal = series.map(_valueFor).fold<double>(0, (a, b) => a > b ? a : b);
+    final maxVal = series
+        .map(_valueFor)
+        .fold<double>(0, (a, b) => a > b ? a : b);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final chartWidth = constraints.maxWidth;
-        final barGap = 4.0;
+        const barGap = 4.0;
         final barWidth =
-            ((chartWidth - (barGap * (series.length - 1))) / series.length)
+            ((constraints.maxWidth - (barGap * (series.length - 1))) /
+                    series.length)
                 .clamp(4.0, 40.0);
         return Padding(
           padding: const EdgeInsets.only(top: 20, bottom: 5),
@@ -700,14 +692,14 @@ class _BarChart extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               for (int i = 0; i < series.length; i++) ...[
-                if (i > 0) SizedBox(width: barGap),
+                if (i > 0) const SizedBox(width: barGap),
                 _BarColumn(
                   width: barWidth,
                   seriesPoint: series[i],
                   value: _valueFor(series[i]),
                   maxValue: maxVal,
-                  isPeak: bestMonth != null && series[i].month == bestMonth!.month,
-                  badgeLabel: _formatLabel(_valueFor(series[i])),
+                  isPeak: peakMonth != null && series[i].month == peakMonth,
+                  badgeLabel: _badge(_valueFor(series[i])),
                 ),
               ],
             ],
@@ -755,7 +747,9 @@ class _BarColumn extends StatelessWidget {
                     width: width,
                     height: barHeight,
                     decoration: BoxDecoration(
-                      color: isPeak ? kReportLime : kReportBorder,
+                      color: isPeak
+                          ? LatoColors.primary
+                          : LatoColors.borderStrongDark,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(4),
                       ),
@@ -770,13 +764,14 @@ class _BarColumn extends StatelessWidget {
                           vertical: 1,
                         ),
                         decoration: BoxDecoration(
-                          color: kReportLime,
+                          color: LatoColors.primary,
                           borderRadius: BorderRadius.circular(3),
                         ),
                         child: Text(
                           badgeLabel,
+                          softWrap: false,
                           style: const TextStyle(
-                            color: kReportLimeDark,
+                            color: LatoColors.bgDark,
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                           ),
@@ -792,7 +787,7 @@ class _BarColumn extends StatelessWidget {
         Text(
           seriesPoint.monthShort,
           style: TextStyle(
-            color: isPeak ? kReportLime : kReportSageDim,
+            color: isPeak ? LatoColors.primary : LatoColors.textSecondaryDark,
             fontSize: 10,
             fontWeight: isPeak ? FontWeight.w700 : FontWeight.w400,
           ),
@@ -810,86 +805,56 @@ class ReportsLifecycleList extends StatelessWidget {
     super.key,
     required this.insights,
     required this.summary,
-    required this.onRemind,
   });
   final ReportInsights insights;
   final ReportSummary summary;
-  final VoidCallback onRemind;
 
   @override
   Widget build(BuildContext context) {
-    final denom =
-        (summary.activeMembers + insights.expiredMembers).clamp(1, 1 << 30);
-    final churnRate = (insights.expiredMembers / denom) * 100;
-    final churnLabel = '${churnRate.toStringAsFixed(1)}% Rate';
-    final duesFormatted = kReportCurrency.format(insights.outstandingDues);
+    final expiring = insights.expiringSoon;
+    final owing = insights.dueMembers;
+    final expired = insights.expiredMembers;
+    final denom = (summary.activeMembers + expired).clamp(1, 1 << 30);
+    final churnRate = (expired / denom) * 100;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Member Lifecycle & Health',
-          style: TextStyle(
-            color: LatoColors.textPrimaryDark,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
+        const Text('Member Lifecycle & Health', style: _sectionTitle),
+        const SizedBox(height: LatoSpacing.sm),
         _LifecycleRow(
-          iconTile: const _IconTile(
-            background: kReportSurfaceSelected,
-            border: kReportBorder,
-            icon: Icons.hourglass_bottom,
-          ),
+          iconTile: const _IconTile(icon: Icons.hourglass_bottom),
           title: 'Expiring in 30 Days',
-          subtitle:
-              '${insights.expiringSoon} memberships expiring this cycle',
-          action: _Pill(
-            label: 'Remind All',
-            bg: kReportLime,
-            fg: kReportLimeDark,
-            onTap: onRemind,
-          ),
+          subtitle: expiring == 0
+              ? 'No memberships expire in the next 30 days'
+              : '$expiring ${_plural(expiring, 'membership expires', 'memberships expire')} in the next 30 days',
         ),
         _LifecycleRow(
-          iconTile: const _IconTile(
-            background: kReportPeachAccentSoft,
-            border: kReportPeachBorder,
+          iconTile: _IconTile(
             icon: Icons.error_outline,
-            iconColor: kReportPeach,
+            iconColor: owing > 0 ? LatoColors.error : null,
+            background: owing > 0 ? LatoColors.tint(LatoColors.error) : null,
+            border: owing > 0 ? LatoColors.error.withValues(alpha: 0.3) : null,
           ),
           title: 'Outstanding Dues',
-          subtitle:
-              '${insights.dueMembers} accounts delinquent ($duesFormatted)',
-          subtitleColor: kReportPeach,
-          action: const _Pill(
-            label: 'Action Req.',
-            bg: kReportPeachAccentSoft,
-            fg: kReportPeach,
-            border: kReportPeachBorder,
-            borderWidth: 0.5,
-            radius: 4,
-            padH: 9,
-            padV: 5,
-          ),
+          subtitle: owing == 0
+              ? 'No outstanding dues'
+              : '$owing ${_plural(owing, 'member owes', 'members owe')} ${reportMoney(insights.outstandingDues)}',
+          subtitleColor: owing > 0 ? LatoColors.error : null,
+          action: owing > 0
+              ? const LatoStatusChip(
+                  label: 'Action needed',
+                  tone: LatoChipTone.error,
+                )
+              : null,
         ),
         _LifecycleRow(
-          iconTile: const _IconTile(
-            background: kReportSurfaceSelected,
-            border: kReportBorder,
-            icon: Icons.person_off_outlined,
-          ),
+          iconTile: const _IconTile(icon: Icons.person_off_outlined),
           title: 'Expired / Churned',
-          subtitle:
-              '${insights.expiredMembers} accounts • Low churn benchmark',
-          action: _Pill(
-            label: churnLabel,
-            bg: kReportLimeSoftBg,
-            fg: kReportLime,
-            border: const Color(0x33C3F400),
-            radius: 4,
-            padH: 9,
-            padV: 3,
+          subtitle: expired == 0
+              ? 'No expired members'
+              : '$expired ${_plural(expired, 'member', 'members')} expired',
+          action: LatoStatusChip(
+            label: '${churnRate.toStringAsFixed(1)}% churn',
           ),
         ),
       ],
@@ -903,25 +868,21 @@ class _LifecycleRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.subtitleColor,
-    required this.action,
+    this.action,
   });
   final Widget iconTile;
   final String title;
   final String subtitle;
   final Color? subtitleColor;
-  final Widget action;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: LatoSpacing.sm),
       child: Container(
-        padding: const EdgeInsets.all(9),
-        decoration: BoxDecoration(
-          color: kReportSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: kReportBorder),
-        ),
+        padding: const EdgeInsets.all(LatoSpacing.md),
+        decoration: _cardDecoration(),
         child: Row(
           children: [
             iconTile,
@@ -941,17 +902,17 @@ class _LifecycleRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      color: subtitleColor ?? kReportSage,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
+                    style: _caption.copyWith(
+                      color: subtitleColor ?? LatoColors.textSecondaryDark,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            action,
+            if (action != null) ...[
+              const SizedBox(width: LatoSpacing.sm),
+              action!,
+            ],
           ],
         ),
       ),
@@ -961,15 +922,15 @@ class _LifecycleRow extends StatelessWidget {
 
 class _IconTile extends StatelessWidget {
   const _IconTile({
-    required this.background,
-    required this.border,
     required this.icon,
-    this.iconColor = kReportSage,
+    this.background,
+    this.border,
+    this.iconColor,
   });
-  final Color background;
-  final Color border;
   final IconData icon;
-  final Color iconColor;
+  final Color? background;
+  final Color? border;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -977,65 +938,15 @@ class _IconTile extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: background,
+        color: background ?? LatoColors.surfaceRaisedDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: border),
+        border: Border.all(color: border ?? LatoColors.borderDark),
       ),
       alignment: Alignment.center,
-      child: Icon(icon, size: 16, color: iconColor),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.label,
-    required this.bg,
-    required this.fg,
-    this.border,
-    this.borderWidth = 1,
-    this.radius = 8,
-    this.padH = 10,
-    this.padV = 6,
-    this.onTap,
-  });
-  final String label;
-  final Color bg;
-  final Color fg;
-  final Color? border;
-  final double borderWidth;
-  final double radius;
-  final double padH;
-  final double padV;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final child = Container(
-      padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(radius),
-        border: border != null
-            ? Border.all(color: border!, width: borderWidth)
-            : null,
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-    if (onTap == null) return child;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(radius),
-        onTap: onTap,
-        child: child,
+      child: Icon(
+        icon,
+        size: 16,
+        color: iconColor ?? LatoColors.textSecondaryDark,
       ),
     );
   }
@@ -1051,36 +962,21 @@ class ReportsPlanDistribution extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sorted = [...plans]..sort((a, b) => b.revenue.compareTo(a.revenue));
-    final totalRevenue =
-        sorted.fold<double>(0, (sum, p) => sum + p.revenue);
+    final totalRevenue = sorted.fold<double>(0, (sum, p) => sum + p.revenue);
     return Container(
-      padding: const EdgeInsets.fromLTRB(17, 17, 17, 17),
-      decoration: BoxDecoration(
-        color: kReportSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kReportBorder),
-      ),
+      padding: const EdgeInsets.all(17),
+      decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Membership Plan Distribution',
-            style: TextStyle(
-              color: LatoColors.textPrimaryDark,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          const Text('Membership Plan Distribution', style: _sectionTitle),
           const SizedBox(height: 12),
           if (sorted.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: LatoSpacing.sm),
               child: Text(
                 'No plan performance data for this year.',
-                style: TextStyle(
-                  color: kReportSage,
-                  fontSize: 12,
-                ),
+                style: _caption.copyWith(fontSize: 12),
               ),
             )
           else
@@ -1116,16 +1012,13 @@ class _PlanRow extends StatelessWidget {
     final pct = isEmpty
         ? 0.0
         : ((plan.revenue / totalRevenue) * 100).clamp(0, 100).toDouble();
-    final pctLabel = '${pct.toStringAsFixed(1)}%';
-    final avgPerYear = plan.activeMembers > 0
-        ? kReportCurrency.format(plan.revenue / plan.activeMembers)
-        : kReportCurrency.format(0);
-    final isUnlinked = plan.planId == null ||
+    final isUnlinked =
+        plan.planId == null ||
         plan.planId!.isEmpty ||
         plan.key.startsWith('legacy:') ||
         plan.key == '__unassigned__';
-    final color = _colorForRank(rank, isUnlinked);
     final isTop = rank == 0 && !isUnlinked;
+    final members = plan.activeMembers;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1145,21 +1038,17 @@ class _PlanRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              kReportCurrency.format(plan.revenue),
+              reportMoney(plan.revenue),
               style: TextStyle(
-                color: isTop ? kReportLime : LatoColors.textPrimaryDark,
+                color: isTop ? LatoColors.primary : LatoColors.textPrimaryDark,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(width: 4),
             Text(
-              isEmpty ? '0.0%' : '($pctLabel)',
-              style: const TextStyle(
-                color: kReportSage,
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-              ),
+              isEmpty ? '0.0%' : '(${pct.toStringAsFixed(1)}%)',
+              style: _caption,
             ),
           ],
         ),
@@ -1173,7 +1062,7 @@ class _PlanRow extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: FractionallySizedBox(
                   widthFactor: (pct / 100).clamp(0.0, 1.0),
-                  child: Container(color: color),
+                  child: Container(color: _colorForRank(rank, isUnlinked)),
                 ),
               ),
             ),
@@ -1184,21 +1073,13 @@ class _PlanRow extends StatelessWidget {
         Row(
           children: [
             Text(
-              '${NumberFormat.decimalPattern().format(plan.activeMembers)} Members',
-              style: const TextStyle(
-                color: kReportSage,
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-              ),
+              '${_count(members)} ${_plural(members, 'member', 'members')}',
+              style: _caption,
             ),
             const Spacer(),
             Text(
-              '$avgPerYear Avg/Yr',
-              style: const TextStyle(
-                color: kReportSage,
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-              ),
+              '${reportMoney(members > 0 ? plan.revenue / members : 0)} avg per member',
+              style: _caption,
             ),
           ],
         ),
@@ -1207,16 +1088,14 @@ class _PlanRow extends StatelessWidget {
   }
 
   Color _colorForRank(int rank, bool isUnlinked) {
-    if (isUnlinked) return kReportGray;
+    if (isUnlinked) return LatoColors.borderStrongDark;
     switch (rank) {
       case 0:
-        return kReportLime;
+        return LatoColors.primary;
       case 1:
-        return kReportCyan;
-      case 2:
-        return kReportSageDim;
+        return LatoColors.textSecondaryDark;
       default:
-        return kReportGray;
+        return LatoColors.borderStrongDark;
     }
   }
 }
@@ -1236,51 +1115,39 @@ class ReportsPaymentChannels extends StatelessWidget {
     'other': 'Other',
   };
 
-  static const _methodColors = {
-    'cash': kReportLime,
-    'card': kReportCyan2,
-    'upi': kReportSageDim,
-    'bank_transfer': kReportGray,
-    'other': Color(0xFF6B6B6B),
-  };
-
   String _labelFor(String method) => _methodLabels[method] ?? 'Other';
 
-  Color _colorFor(String method) =>
-      _methodColors[method] ?? const Color(0xFF6B6B6B);
+  /// Cash carries the accent; the rest are neutral steps so the bar reads
+  /// without introducing new hues.
+  Color _colorFor(String method) {
+    switch (method) {
+      case 'cash':
+        return LatoColors.primary;
+      case 'upi':
+        return LatoColors.textSecondaryDark;
+      case 'card':
+        return LatoColors.textPrimaryDark.withValues(alpha: 0.6);
+      case 'bank_transfer':
+        return LatoColors.borderStrongDark;
+      default:
+        return LatoColors.textSecondaryDark.withValues(alpha: 0.4);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final gross = methods.fold<double>(0, (s, m) => s + m.amount);
     return Container(
-      padding: const EdgeInsets.fromLTRB(17, 17, 17, 16),
-      decoration: BoxDecoration(
-        color: kReportSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kReportBorder),
-      ),
+      padding: const EdgeInsets.all(17),
+      decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Payment Channels',
-                style: TextStyle(
-                  color: LatoColors.textPrimaryDark,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                'Gross: ${reportKFormat(gross)}',
-                style: const TextStyle(
-                  color: kReportSage,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
+              const Text('Payment Channels', style: _sectionTitle),
+              Text('Gross: ${reportCompactMoney(gross)}', style: _caption),
             ],
           ),
           const SizedBox(height: 12),
@@ -1290,28 +1157,25 @@ class ReportsPaymentChannels extends StatelessWidget {
             Container(
               height: 12,
               decoration: BoxDecoration(
-                color: kReportSurfaceAlt,
+                color: LatoColors.surfaceRaisedDark,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
           const SizedBox(height: 12),
           if (methods.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 'No payment data for this year.',
-                style: TextStyle(
-                  color: kReportSage,
-                  fontSize: 12,
-                ),
+                style: _caption.copyWith(fontSize: 12),
               ),
             )
           else
-            for (int i = 0; i < methods.length; i++)
+            for (final m in methods)
               _MethodRow(
-                method: methods[i],
-                color: _colorFor(methods[i].method),
-                label: _labelFor(methods[i].method),
+                method: m,
+                color: _colorFor(m.method),
+                label: _labelFor(m.method),
               ),
         ],
       ),
@@ -1330,7 +1194,7 @@ class _SegmentedBar extends StatelessWidget {
       height: 12,
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        color: kReportSurfaceAlt,
+        color: LatoColors.surfaceRaisedDark,
         borderRadius: BorderRadius.circular(999),
       ),
       clipBehavior: Clip.hardEdge,
@@ -1363,21 +1227,18 @@ class _MethodRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(9),
+      padding: const EdgeInsets.all(LatoSpacing.md),
       decoration: BoxDecoration(
-        color: kReportSurfaceAlt,
+        color: LatoColors.surfaceRaisedDark,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0x8031353C)),
+        border: Border.all(color: LatoColors.borderDark),
       ),
       child: Row(
         children: [
           Container(
             width: 10,
             height: 10,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1394,12 +1255,8 @@ class _MethodRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${NumberFormat.decimalPattern().format(method.count)} Transactions',
-                  style: const TextStyle(
-                    color: kReportSage,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  '${_count(method.count)} ${_plural(method.count, 'transaction', 'transactions')}',
+                  style: _caption.copyWith(fontSize: 10),
                 ),
               ],
             ),
@@ -1409,7 +1266,7 @@ class _MethodRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                kReportCurrency.format(method.amount),
+                reportMoney(method.amount),
                 style: const TextStyle(
                   color: LatoColors.textPrimaryDark,
                   fontSize: 12,
@@ -1419,11 +1276,7 @@ class _MethodRow extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 '${method.percentage.toStringAsFixed(1)}%',
-                style: const TextStyle(
-                  color: kReportSage,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w400,
-                ),
+                style: _caption.copyWith(fontSize: 10),
               ),
             ],
           ),

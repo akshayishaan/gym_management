@@ -8,10 +8,13 @@
 // page (e.g. opened from a deep link or after a delete).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
+import '../../../design/components/lato_sheet.dart';
 import '../../../design/components/lato_card.dart';
 import '../../../design/components/lato_empty_state.dart';
 import '../../../design/components/lato_status_chip.dart';
@@ -40,19 +43,9 @@ class PlanDetailScreen extends ConsumerStatefulWidget {
 
 class _PlanDetailScreenState extends ConsumerState<PlanDetailScreen> {
   Future<void> _openEditSheet(Plan plan) async {
-    await showModalBottomSheet<void>(
+    await showLatoFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: LatoColors.surfaceDark,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-      ),
-      builder: (_) => FractionallySizedBox(
-        heightFactor: 0.92,
-        child: PlanFormSheet(existingPlan: plan),
-      ),
+      builder: (_) => PlanFormSheet(existingPlan: plan),
     );
   }
 
@@ -88,16 +81,29 @@ class _PlanDetailScreenState extends ConsumerState<PlanDetailScreen> {
           .read(planDeactivateControllerProvider.notifier)
           .setActive(plan.id, false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${plan.name} deactivated')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${plan.name} deactivated')));
       // Pop back to the list; the underlying provider invalidation will
       // refresh the row in the list view automatically.
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      final msg =
-          e is ApiException ? e.message : 'Could not deactivate plan.';
+      final msg = e is ApiException ? e.message : 'Could not deactivate plan.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Future<void> _reactivate(Plan plan) async {
+    try {
+      await ref
+          .read(planDeactivateControllerProvider.notifier)
+          .setActive(plan.id, true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${plan.name} reactivated')));
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e is ApiException ? e.message : 'Could not reactivate plan.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -142,15 +148,15 @@ class _PlanDetailScreenState extends ConsumerState<PlanDetailScreen> {
             return LatoEmptyState(
               icon: Icons.fitness_center_outlined,
               title: 'Plan not found',
-              body: 'This plan is no longer in the first page of results.',
-              actionLabel: 'Retry',
-              onAction: () => ref.invalidate(planListProvider),
+              body: 'It may have been removed.',
+              actionLabel: 'Back to plans',
+              onAction: () => context.go('/plans'),
             );
           }
           return _DetailBody(
             plan: plan,
-            onEdit: () => _openEditSheet(plan),
             onDeactivate: () => _confirmAndDeactivate(plan),
+            onReactivate: () => _reactivate(plan),
           );
         },
       ),
@@ -168,13 +174,13 @@ class _PlanDetailScreenState extends ConsumerState<PlanDetailScreen> {
 class _DetailBody extends ConsumerWidget {
   const _DetailBody({
     required this.plan,
-    required this.onEdit,
     required this.onDeactivate,
+    required this.onReactivate,
   });
 
   final Plan plan;
-  final VoidCallback onEdit;
   final VoidCallback onDeactivate;
+  final VoidCallback onReactivate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -201,8 +207,8 @@ class _DetailBody extends ConsumerWidget {
               const SizedBox(height: LatoSpacing.xxl),
               _BottomActions(
                 plan: plan,
-                onEdit: onEdit,
                 onDeactivate: onDeactivate,
+                onReactivate: onReactivate,
               ),
               const SizedBox(height: LatoSpacing.xxl),
             ]),
@@ -270,10 +276,7 @@ class _IdentityCard extends StatelessWidget {
           ),
           if (plan.description != null && plan.description!.isNotEmpty) ...[
             const SizedBox(height: LatoSpacing.md),
-            Text(
-              plan.description!,
-              style: theme.textTheme.bodyMedium,
-            ),
+            Text(plan.description!, style: theme.textTheme.bodyMedium),
           ],
         ],
       ),
@@ -315,28 +318,20 @@ class _StatsCard extends StatelessWidget {
         children: [
           Expanded(
             child: _StatColumn(
-              label: 'Members',
-              value: NumberFormat.decimalPattern().format(activeMembers),
+              label: 'Active members',
+              value: formatInrWhole(activeMembers),
               valueColor: LatoColors.textPrimaryDark,
             ),
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: LatoColors.borderDark,
-          ),
+          Container(width: 1, height: 40, color: LatoColors.borderDark),
           Expanded(
             child: _StatColumn(
               label: 'YTD Sales',
-              value: NumberFormat.decimalPattern().format(salesYtd),
+              value: formatInrWhole(salesYtd),
               valueColor: LatoColors.textPrimaryDark,
             ),
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: LatoColors.borderDark,
-          ),
+          Container(width: 1, height: 40, color: LatoColors.borderDark),
           Expanded(
             child: _StatColumn(
               label: 'YTD Revenue',
@@ -349,13 +344,7 @@ class _StatsCard extends StatelessWidget {
     );
   }
 
-  String _formatCurrency(double v) {
-    final whole = v.truncate();
-    final cents =
-        ((v - whole).abs() * 100).round().toString().padLeft(2, '0');
-    final intPart = NumberFormat.decimalPattern().format(whole);
-    return '\$$intPart.$cents';
-  }
+  String _formatCurrency(double v) => '₹${formatInrWhole(v.truncate())}';
 }
 
 class _StatColumn extends StatelessWidget {
@@ -372,38 +361,44 @@ class _StatColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: LatoColors.textSecondaryDark,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: valueColor,
-              fontWeight: FontWeight.w700,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: LatoSpacing.sm),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: LatoColors.textSecondaryDark,
+                letterSpacing: 0.4,
+              ),
             ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
           ),
-        ),
-      ],
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: valueColor,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Feature chips rendered with a lime-tinted background per the Figma
-/// (`24/7 Access`, `Recovery Lab`, `Unlimited Guests`, etc.). When the
-/// plan has no features the entire card is omitted by the parent.
+/// Feature chips (`24/7 Access`, `Recovery Lab`, etc.), neutral like the list
+/// card. When the plan has no features the parent omits the whole card.
 class _FeaturesCard extends StatelessWidget {
   const _FeaturesCard({required this.features});
   final List<String> features;
@@ -427,40 +422,11 @@ class _FeaturesCard extends StatelessWidget {
             spacing: LatoSpacing.sm,
             runSpacing: LatoSpacing.sm,
             children: [
-              for (final f in features) _FeatureChip(label: f),
+              for (final f in features)
+                LatoStatusChip(label: f, tone: LatoChipTone.neutral),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FeatureChip extends StatelessWidget {
-  const _FeatureChip({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: LatoSpacing.md,
-        vertical: LatoSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: LatoColors.primary.withValues(alpha: 0.16),
-        borderRadius: LatoRadius.chip,
-        border: Border.all(
-          color: LatoColors.primary.withValues(alpha: 0.6),
-        ),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: LatoColors.primary,
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -500,86 +466,48 @@ class _DatesRow extends StatelessWidget {
 
   String _formatDate(DateTime? dt) {
     if (dt == null) return '—';
-    return DateFormat.yMMMd().format(dt.toLocal());
+    return DateFormat('d MMM y').format(dt.toLocal());
   }
 }
 
-/// Full-width "Edit Plan" lime CTA plus an outlined "Deactivate" red
-/// button (only when the plan is active). Tapping Edit re-opens the
-/// form sheet via the same handler the AppBar pencil uses.
+/// Deactivate (red outline) for an active plan, Reactivate (lime outline) for
+/// a paused one. Editing is the pencil in the app bar.
 class _BottomActions extends ConsumerWidget {
   const _BottomActions({
     required this.plan,
-    required this.onEdit,
     required this.onDeactivate,
+    required this.onReactivate,
   });
 
   final Plan plan;
-  final VoidCallback onEdit;
   final VoidCallback onDeactivate;
+  final VoidCallback onReactivate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final updateState = ref.watch(planUpdateControllerProvider);
-    final deactivateState = ref.watch(planDeactivateControllerProvider);
-    final anyLoading = updateState.loading || deactivateState.loading;
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: anyLoading ? null : onEdit,
-            style: FilledButton.styleFrom(
-              backgroundColor: LatoColors.primary,
-              foregroundColor: LatoColors.bgDark,
-              minimumSize: const Size.fromHeight(56),
-            ),
-            child: updateState.loading
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: LatoColors.bgDark,
-                    ),
-                  )
-                : const Text(
-                    'Edit Plan',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-          ),
+    final loading = ref.watch(planDeactivateControllerProvider).loading;
+    final active = plan.isActive;
+    final color = active ? LatoColors.error : LatoColors.primary;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          side: BorderSide(color: color, width: 1),
+          minimumSize: const Size.fromHeight(LatoSizes.button),
         ),
-        if (plan.isActive) ...[
-          const SizedBox(height: LatoSpacing.md),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: LatoColors.error,
-                side: const BorderSide(color: LatoColors.error, width: 1),
-                minimumSize: const Size.fromHeight(48),
+        onPressed: loading ? null : (active ? onDeactivate : onReactivate),
+        child: loading
+            ? SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+            : Text(
+                active ? 'Deactivate' : 'Reactivate',
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-              onPressed: deactivateState.loading ? null : onDeactivate,
-              child: deactivateState.loading
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: LatoColors.error,
-                      ),
-                    )
-                  : const Text(
-                      'Deactivate',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 }

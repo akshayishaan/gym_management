@@ -6,11 +6,15 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
+import '../../../design/components/lato_fab.dart';
 import '../../../design/components/lato_card.dart';
+import '../../../design/components/lato_load_more_footer.dart';
 import '../../../design/components/lato_empty_state.dart';
 import '../../../design/components/lato_error_state.dart';
-import '../../../design/components/lato_loading.dart';
+import '../../../design/components/lato_skeleton.dart';
+import '../../../design/components/lato_sheet.dart';
 import '../../../design/components/lato_status_chip.dart';
 import '../../../design/spacing.dart';
 import '../data/member_repository.dart';
@@ -34,6 +38,11 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
   String? _activeStatus; // null = "all"
   Timer? _debounce;
 
+  /// Number of 20-member pages currently shown. Reset to 1 whenever the
+  /// search or status filter changes (see [_loadedFilterKey] in build).
+  int _pages = 1;
+  String _loadedFilterKey = '';
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -50,40 +59,40 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
   }
 
   Future<void> _openAddMemberSheet() async {
-    await showModalBottomSheet<void>(
+    await showLatoFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: LatoColors.surfaceDark,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-      ),
-      builder: (sheetCtx) => FractionallySizedBox(
-        heightFactor: 0.92,
-        child: const MemberFormSheet(),
-      ),
+      builder: (_) => const MemberFormSheet(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final filterKey = '$_searchQuery|$_activeStatus';
+    if (filterKey != _loadedFilterKey) {
+      _loadedFilterKey = filterKey;
+      _pages = 1;
+    }
     final query = MemberListQuery(
       search: _searchQuery.isEmpty ? null : _searchQuery,
       status: _activeStatus,
     );
-    final membersAsync = ref.watch(memberListProvider(query));
+    // Watch every page loaded so far; the list is their concatenation.
+    final pageAsyncs = [
+      for (var i = 1; i <= _pages; i++)
+        ref.watch(memberListProvider(query.copyWith(page: i))),
+    ];
+    final membersAsync = pageAsyncs.first;
+    final lastPage = pageAsyncs.last;
 
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 56,
         title: Text('Members', style: theme.textTheme.headlineSmall),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: _AddPillButton(onTap: _openAddMemberSheet),
-          ),
-        ],
+      ),
+      floatingActionButton: LatoFab(
+        label: 'New Member',
+        onPressed: _openAddMemberSheet,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,6 +108,11 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
             child: _SearchBar(
               controller: _searchController,
               onChanged: _onSearchChanged,
+              onClear: () {
+                _debounce?.cancel();
+                _searchController.clear();
+                setState(() => _searchQuery = '');
+              },
             ),
           ),
           // Status filter chips
@@ -127,7 +141,7 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
                 ),
                 const SizedBox(width: LatoSpacing.sm),
                 _StatusChip(
-                  label: 'Expiring',
+                  label: 'Expired',
                   selected: _activeStatus == 'expired',
                   onTap: () => setState(() => _activeStatus = 'expired'),
                 ),
@@ -144,7 +158,30 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
           // List body
           Expanded(
             child: membersAsync.when(
+              skipLoadingOnReload: true,
               data: (page) {
+                if (page.members.isEmpty &&
+                    (_searchQuery.isNotEmpty || _activeStatus != null)) {
+                  return Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(LatoSpacing.lg),
+                      child: LatoEmptyState(
+                        icon: Icons.search_off,
+                        title: 'No members match',
+                        body: 'Try a different search or filter.',
+                        actionLabel: 'Clear filters',
+                        onAction: () {
+                          _debounce?.cancel();
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                            _activeStatus = null;
+                          });
+                        },
+                      ),
+                    ),
+                  );
+                }
                 if (page.members.isEmpty) {
                   return Center(
                     child: SingleChildScrollView(
@@ -152,27 +189,53 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
                       child: LatoEmptyState(
                         icon: Icons.person_outline,
                         title: 'No members yet',
-                        body:
-                            'Add your first member to start tracking memberships.',
+                        body: 'Add your first member to start tracking memberships.',
                         actionLabel: 'Add Member',
                         onAction: _openAddMemberSheet,
                       ),
                     ),
                   );
                 }
+                // Merge the pages loaded so far; de-duplicate by id in case a
+                // member was added while paging shifted the page boundaries.
+                final seen = <String>{};
+                final members = [
+                  for (final a in pageAsyncs)
+                    if (a.valueOrNull != null)
+                      for (final m in a.valueOrNull!.members)
+                        if (seen.add(m.id)) m,
+                ];
+                final loadingMore =
+                    _pages > 1 && lastPage.isLoading && !lastPage.hasValue;
+                final loadMoreFailed =
+                    _pages > 1 && lastPage.hasError && !lastPage.hasValue;
+                final hasMore = lastPage.valueOrNull?.hasMore ?? false;
+                final showFooter = hasMore || loadingMore || loadMoreFailed;
                 return ListView.builder(
                   padding: const EdgeInsets.fromLTRB(
                     LatoSpacing.xl,
                     0,
                     LatoSpacing.xl,
-                    LatoSpacing.xxl,
+                    LatoSpacing.fabClearance,
                   ),
-                  itemCount: page.members.length + 1,
+                  itemCount: members.length + 1 + (showFooter ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == 0) {
                       return _ListHeader(total: page.total);
                     }
-                    final member = page.members[index - 1];
+                    if (index > members.length) {
+                      return LatoLoadMoreFooter(
+                        shown: members.length,
+                        total: page.total,
+                        loading: loadingMore,
+                        failed: loadMoreFailed,
+                        onLoadMore: () => setState(() => _pages++),
+                        onRetry: () => ref.invalidate(
+                          memberListProvider(query.copyWith(page: _pages)),
+                        ),
+                      );
+                    }
+                    final member = members[index - 1];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: LatoSpacing.md),
                       child: _MemberCard(
@@ -183,10 +246,11 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
                   },
                 );
               },
-              loading: () =>
-                  const LatoLoading(),
+              loading: () => const _MembersSkeletonList(),
               error: (err, _) => LatoErrorState(
-                message: err is ApiException ? err.message : 'Could not load members.',
+                message: err is ApiException
+                    ? err.message
+                    : 'Could not load members.',
                 onRetry: () => ref.invalidate(memberListProvider(query)),
               ),
             ),
@@ -197,62 +261,123 @@ class _MembersListScreenState extends ConsumerState<MembersListScreen> {
   }
 }
 
-/// Lime "+" pill button in the AppBar.
-class _AddPillButton extends StatelessWidget {
-  const _AddPillButton({required this.onTap});
-  final VoidCallback onTap;
+/// Placeholder list for the first load or a new filter. Mirrors the header row
+/// and [_MemberCard] padding and block heights.
+class _MembersSkeletonList extends StatelessWidget {
+  const _MembersSkeletonList();
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: LatoColors.primary,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: const SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(Icons.add, color: LatoColors.bgDark, size: 24),
+    return ExcludeSemantics(
+      child: ListView(
+        key: const Key('members-skeleton'),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          LatoSpacing.xl,
+          0,
+          LatoSpacing.xl,
+          LatoSpacing.fabClearance,
         ),
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: LatoSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: LatoSkeletonBlock(width: 140, height: 12),
+            ),
+          ),
+          for (var i = 0; i < 6; i++) ...[
+            const _MemberCardSkeleton(),
+            const SizedBox(height: LatoSpacing.md),
+          ],
+        ],
       ),
     );
   }
 }
 
-/// Search field with leading search icon and trailing filter button.
+class _MemberCardSkeleton extends StatelessWidget {
+  const _MemberCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const LatoCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LatoSkeletonBlock(width: 48, height: 48, radius: 24),
+          SizedBox(width: LatoSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LatoSkeletonBlock(width: 140, height: 16),
+                SizedBox(height: 6),
+                LatoSkeletonBlock(width: 96, height: 12),
+                SizedBox(height: 6),
+                LatoSkeletonBlock(width: 104, height: 12),
+                SizedBox(height: 6),
+                LatoSkeletonBlock(width: 120, height: 12),
+              ],
+            ),
+          ),
+          SizedBox(width: LatoSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              LatoSkeletonBlock(width: 64, height: 22, radius: LatoRadius.pill),
+              SizedBox(height: 40),
+              LatoSkeletonBlock(width: 56, height: 22, radius: LatoRadius.pill),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Search field with a leading search icon and a clear button that appears
+/// while there is text.
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
     required this.onChanged,
+    required this.onClear,
   });
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      textInputAction: TextInputAction.search,
-      decoration: InputDecoration(
-        hintText: 'Search members by name, phone, or plan...',
-        prefixIcon: const Icon(
-          Icons.search,
-          size: 20,
-          color: LatoColors.textSecondaryDark,
-        ),
-        suffixIcon: IconButton(
-          icon: const Icon(
-            Icons.tune,
-            size: 18,
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => TextField(
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search members by name, phone, or plan...',
+          prefixIcon: const Icon(
+            Icons.search,
+            size: 20,
             color: LatoColors.textSecondaryDark,
           ),
-          onPressed: () {},
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: LatoSpacing.md,
-          vertical: 0,
+          suffixIcon: value.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: LatoColors.textSecondaryDark,
+                  ),
+                  onPressed: onClear,
+                ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: LatoSpacing.md,
+            vertical: 0,
+          ),
         ),
       ),
     );
@@ -286,7 +411,7 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-/// "TOTAL MEMBERS 1,420 / Sorted by: Expiry Date ⇅" header row.
+/// "TOTAL MEMBERS 1,420" header row, with the count in lime.
 class _ListHeader extends StatelessWidget {
   const _ListHeader({required this.total});
   final int total;
@@ -302,24 +427,23 @@ class _ListHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: LatoSpacing.md),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              'TOTAL MEMBERS  ${NumberFormat.decimalPattern().format(total)}',
-              style: labelStyle,
+          Text('TOTAL MEMBERS', style: labelStyle),
+          const SizedBox(width: LatoSpacing.sm),
+          Text(
+            NumberFormat.decimalPattern().format(total),
+            style: labelStyle?.copyWith(
+              color: LatoColors.primary,
+              fontWeight: FontWeight.w800,
             ),
-          ),
-          Text('Sorted by: Expiry Date', style: labelStyle),
-          const SizedBox(width: 4),
-          const Icon(
-            Icons.swap_vert,
-            size: 14,
-            color: LatoColors.textSecondaryDark,
           ),
         ],
       ),
     );
   }
 }
+
+/// End-of-list footer: "Showing X of Y" with a Load more button, a spinner
+/// while the next page loads, or a retry row if it failed.
 
 /// One member row — avatar + center column + right column with status chip
 /// and Paid/Due pill.
@@ -331,53 +455,82 @@ class _MemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final expiryColor = switch (member.status) {
+      'expired' => LatoColors.error,
+      'expiring' => LatoColors.warning,
+      _ => theme.colorScheme.onSurfaceVariant,
+    };
     return Semantics(
       button: true,
       label: 'Member ${member.name}',
       child: LatoCard(
         onTap: onTap,
-        child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _InitialsAvatar(member: member),
-          const SizedBox(width: LatoSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  member.name,
-                  style: theme.textTheme.titleMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                if ((member.planName ?? '').isNotEmpty)
-                  Text(member.planName!, style: theme.textTheme.bodySmall),
-                Text(member.phone, style: theme.textTheme.bodySmall),
-                if ((member.membershipExpiry ?? '').isNotEmpty)
-                  Text(
-                    'Exp: ${member.membershipExpiry!}',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: LatoColors.warning),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: LatoSpacing.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _StatusChipForMember(status: member.status, daysLeft: member.daysUntilExpiry),
-              const SizedBox(height: LatoSpacing.sm),
-              _PaymentPill(dueAmount: member.dueAmount),
+              Align(
+                alignment: Alignment.topCenter,
+                child: _InitialsAvatar(member: member),
+              ),
+              const SizedBox(width: LatoSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      member.name,
+                      style: theme.textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    if ((member.planName ?? '').isNotEmpty)
+                      Text(
+                        member.planName!,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    Text(member.phone, style: theme.textTheme.bodySmall),
+                    if ((member.membershipExpiry ?? '').isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Exp: ${_formatDate(member.membershipExpiry!)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: expiryColor,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: LatoSpacing.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _StatusChipForMember(
+                    status: member.status,
+                    daysLeft: member.daysUntilExpiry,
+                  ),
+                  _PaymentPill(dueAmount: member.dueAmount),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        ),
       ),
     );
+  }
+
+  /// Display-only reformat of the server's `YYYY-MM-DD` date, e.g. `4 Oct 2026`.
+  /// Falls back to the raw string if it can't be parsed.
+  static String _formatDate(String isoDate) {
+    final parsed = DateTime.tryParse(isoDate);
+    if (parsed == null) return isoDate;
+    return DateFormat('d MMM yyyy').format(parsed);
   }
 }
 
@@ -443,36 +596,31 @@ class _StatusChipForMember extends StatelessWidget {
   }
 }
 
-/// Right-side solid badge: red "Due:$X" when dueAmount > 0, else green
-/// "PAID". Unlike [LatoStatusChip]'s translucent outline, this is a solid
-/// fill matching the Figma payment badge (node 2:1890) — colors sampled
-/// from the reference: a deep tinted fill with a brighter same-hue text,
-/// not a bright fill with white text.
+/// Right-side badge: "Due: ₹X" in the error tint when dueAmount > 0, else
+/// "PAID" in the success tint. No border, unlike [LatoStatusChip], so it reads
+/// as a quieter secondary badge under the status chip.
 class _PaymentPill extends StatelessWidget {
   const _PaymentPill({required this.dueAmount});
   final double dueAmount;
 
-  static const _dueBg = Color(0xFF93000A);
-  static const _dueFg = Color(0xFFE88E89);
-  static const _paidBg = Color(0xFF1A301E);
-  static const _paidFg = Color(0xFF16A34A);
-
   @override
   Widget build(BuildContext context) {
     final isDue = dueAmount > 0;
+    final color = isDue ? LatoColors.error : LatoColors.success;
+    final due = formatInr(dueAmount, decimals: dueAmount % 1 == 0 ? 0 : 2);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: LatoSpacing.sm,
         vertical: LatoSpacing.xxs,
       ),
       decoration: BoxDecoration(
-        color: isDue ? _dueBg : _paidBg,
+        color: LatoColors.tint(color),
         borderRadius: BorderRadius.circular(LatoRadius.sm),
       ),
       child: Text(
-        isDue ? 'Due:\$${dueAmount.round()}' : 'PAID',
+        isDue ? 'Due: $due' : 'PAID',
         style: TextStyle(
-          color: isDue ? _dueFg : _paidFg,
+          color: color,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.4,

@@ -1,68 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../design/components/lato_card.dart';
 import '../application/auth_controller.dart';
 
-/// Figma "01 login" — RepiX brand splash with the "Get started" CTA.
-///
-/// Shows the RepiX logotype over a black background with a hero illustration
-/// and the tagline. Tapping "Get started" routes to the real login form.
-class SplashScreen extends ConsumerWidget {
+/// How long the artwork stays up on launch, even if auth rehydrates sooner.
+const kSplashMinDuration = Duration(milliseconds: 1500);
+
+/// RepiX splash: the full-bleed brand artwork (`splash1.png`, which already
+/// carries the logotype and tagline) and nothing else. It has no navigation
+/// of its own: once [kSplashMinDuration] has passed it marks itself done and
+/// the router sends the user to home, gym creation, welcome or login.
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+}
 
-    // Watch the auth state. As soon as rehydration says "already signed in",
-    // the router's redirect kicks us to /home — but we also proactively push
-    // from here so the brand page doesn't flash on cold start.
-    ref.listen<AuthState>(authControllerProvider, (prev, next) {
-      if (next.stage == AuthStage.authenticated) {
-        if (context.mounted) context.go('/home');
-      } else if (next.stage == AuthStage.unauthenticated) {
-        if (context.mounted) context.go('/login');
-      }
+class _SplashScreenState extends ConsumerState<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(kSplashMinDuration, () {
+      if (mounted) ref.read(splashDoneProvider.notifier).state = true;
     });
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Logo + tagline
-              Text(
-                'RepiX',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.displayLarge?.copyWith(
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: -1.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'TRACK  ◆  IMPROVE  ◆  GROW',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: Colors.white,
-                  letterSpacing: 4,
-                ),
-              ),
-              const Spacer(),
-              // CTA
-              LatoPrimaryButton(
-                label: 'Get started',
-                onPressed: () => context.go('/login'),
-              ),
-            ],
-          ),
+      body: SizedBox.expand(
+        // Artwork is near the phone's aspect ratio; anchoring to the top
+        // keeps the logo and face intact on taller or wider screens.
+        child: Image.asset(
+          'assets/splash1.png',
+          fit: BoxFit.cover,
+          alignment: Alignment.topCenter,
+          excludeFromSemantics: true,
         ),
       ),
     );

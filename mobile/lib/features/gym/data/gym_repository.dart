@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/dio_client.dart';
 import '../domain/gym.dart';
+import '../domain/gym_deletion_summary.dart';
 
 /// Network access for Gym CRUD. Backend routes live in
 /// `backend/src/gyms/gym.controller.ts` and are scoped to the staff's
@@ -60,8 +61,8 @@ class GymRepository {
     String? address,
     String? phone,
     String? email,
-    String currency = 'USD',
-    String timezone = 'America/Los_Angeles',
+    String currency = 'INR',
+    String timezone = 'Asia/Kolkata',
     String primaryColor = '#C5F23F',
     int expiryReminderDays = 7,
   }) async {
@@ -89,11 +90,47 @@ class GymRepository {
   /// PUT /gyms/:id — partial update of gym settings.
   Future<Gym> updateGym(String id, Map<String, dynamic> patch) async {
     try {
-      final res =
-          await _dio.put<Map<String, dynamic>>('/gyms/$id', data: patch);
+      final res = await _dio.put<Map<String, dynamic>>(
+        '/gyms/$id',
+        data: patch,
+      );
       if (res.statusCode == 200 && res.data != null) {
         return Gym.fromJson(res.data!);
       }
+      throw toApiException(_badResponse(res));
+    } on DioException catch (e) {
+      throw toApiException(e);
+    }
+  }
+
+  /// GET /gyms/:id/deletion-summary — counts of what deleting would erase.
+  Future<GymDeletionSummary> deletionSummary(String id) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/gyms/$id/deletion-summary',
+      );
+      if (res.statusCode == 200 && res.data != null) {
+        return GymDeletionSummary.fromJson(res.data!);
+      }
+      throw toApiException(_badResponse(res));
+    } on DioException catch (e) {
+      throw toApiException(e);
+    }
+  }
+
+  /// DELETE /gyms/:id — permanently deletes the gym and all its data. The
+  /// server requires the exact gym name and the caller's password.
+  Future<void> deleteGym(
+    String id, {
+    required String confirmName,
+    required String password,
+  }) async {
+    try {
+      final res = await _dio.delete<dynamic>(
+        '/gyms/$id',
+        data: {'confirmName': confirmName, 'password': password},
+      );
+      if (res.statusCode == 200) return;
       throw toApiException(_badResponse(res));
     } on DioException catch (e) {
       throw toApiException(e);

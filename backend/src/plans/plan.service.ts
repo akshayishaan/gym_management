@@ -51,8 +51,12 @@ export class PlansService {
     if (status === "inactive") query.isActive = false;
     if (search) query.name = partialPlanNamePattern(search);
 
-    const [total, plans] = await Promise.all([
+    const [total, activeCount, inactiveCount, plans] = await Promise.all([
       Plan.countDocuments(query),
+      // Gym-wide counts for the list filter pills; unaffected by the
+      // status/search filters above.
+      Plan.countDocuments({ gymId, isActive: { $ne: false } }),
+      Plan.countDocuments({ gymId, isActive: false }),
       Plan.find(query)
         .sort({ isActive: -1, price: 1 })
         .skip((page - 1) * limit)
@@ -60,13 +64,19 @@ export class PlansService {
         .lean(),
     ]);
 
+    const counts = {
+      all: activeCount + inactiveCount,
+      active: activeCount,
+      inactive: inactiveCount,
+    };
+
     const serializedPlans = plans.map((plan) => ({
       ...plan,
       _id: plan._id.toString(),
     }));
 
     if (!includeStats) {
-      return { plans: serializedPlans, total, page, limit };
+      return { plans: serializedPlans, total, page, limit, counts };
     }
 
     const gym = await Gym.findById(gymId).select("timezone").lean();
@@ -93,7 +103,7 @@ export class PlansService {
       },
     }));
 
-    return { plans: enrichedPlans, total, page, limit, summary: insights.summary };
+    return { plans: enrichedPlans, total, page, limit, counts, summary: insights.summary };
   }
 
   async create(user: AuthenticatedUser, gymId: Types.ObjectId, body: unknown): Promise<IPlan> {

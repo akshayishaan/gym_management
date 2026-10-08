@@ -106,6 +106,7 @@ export class MembersService {
       membershipStart,
       amountPaid,
       paymentMethod,
+      reference,
       ...member
     } = validated;
 
@@ -119,6 +120,7 @@ export class MembersService {
       membershipStart,
       amountPaid,
       paymentMethod,
+      reference,
     });
 
     const [savedMember, payment] = await Promise.all([

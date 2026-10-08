@@ -1,0 +1,108 @@
+# =============================================================================
+# Gym Management — self-hosted backend stack
+#
+# Target: a single Oracle Cloud Ampere A1 VM (ARM64 / aarch64, Ubuntu,
+# 2 OCPU / 12 GB RAM). All three services run in one compose project on that
+# one VM. Only port 3001 is exposed to the host (the VM security list already
+# allows 22 + 3001); Mongo and Redis stay internal to the compose network.
+#
+# NOTE ON RESOURCES: this VM has 12 GB RAM. We deliberately do NOT set
+# `mem_limit`/`cpus` on any service — the stack is sized to fit comfortably
+# and capping it would only starve Mongo's WiredTiger cache or the Node heap.
+# If you later co-locate other workloads, revisit limits here.
+#
+# Overridable variables (set in a `backend/.env` file or the shell env):
+#   JWT_SECRET          — access-token signing secret (REQUIRED in production)
+#   JWT_REFRESH_SECRET  — refresh-token signing secret (REQUIRED in production)
+#   MONGO_INITDB_ROOT_USERNAME / MONGO_INITDB_ROOT_PASSWORD — optional Mongo auth
+#   MONGO_PORT          — host port for Mongo (default: unexposed)
+#   REDIS_PORT          — host port for Redis (default: unexposed)
+#
+# The JWT secrets below use `${VAR:-changeme}` defaults so `docker compose up`
+# works out of the box for local smoke-testing. Override them for any real
+# deployment — never ship the defaults.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB — single-node replica set (transactions require a replica set).
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    # The init script wraps mongod: it starts mongod, runs rs.initiate()
+    # idempotently, waits for PRIMARY, then keeps mongod in the foreground.
+    entrypoint: ["/bin/bash", "/docker-entrypoint-initdb.d/mongo-init.sh"]
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    environment:
+      # Optional auth. If set, the backend MONGODB_URI must embed matching
+      # credentials. Leave unset for a trust-the-network dev setup.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-}
+      REPL_SET_NAME: rs0
+      MONGO_HOST_NAME: mongo
+      MONGO_PORT: "27017"
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+    # Mongo is internal-only: no host port mapping. The backend reaches it by
+    # service name over the shared network.
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - backend-net
+
+  # ---------------------------------------------------------------------------
+  # Redis — read cache + BullMQ invalidation queue (optional but included).
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    # Internal-only: no host port mapping.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - backend-net
+
+  # ---------------------------------------------------------------------------
+  # Backend — NestJS API, built from the existing Dockerfile in this dir.
+  # ---------------------------------------------------------------------------
+  backend:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # Replica-set connection string. `?replicaSet=rs0` is required so the
+      # driver performs replica-set discovery; without it transactions fail.
+      MONGODB_URI: mongodb://mongo:27017/gym_management?replicaSet=rs0
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-changeme}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-changeme}
+    ports:
+      - "3001:3001"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - backend-net
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  backend-net:
+    driver: bridge

@@ -12,7 +12,11 @@ import {
 import { JwtAuthGuard } from "../auth";
 import type { AuthenticatedRequest } from "../auth";
 import { GymsService } from "./gym.service";
-import type { GymCreateInput, GymUpdateInput } from "./gym.schemas";
+import type {
+  GymCreateInput,
+  GymDeleteInput,
+  GymUpdateInput,
+} from "./gym.schemas";
 
 /**
  * Gym CRUD. Guarded by `JwtAuthGuard` only — not `RequireGymGuard` — so a
@@ -49,8 +53,17 @@ export class GymsController {
     return this.gymsService.update(id, body, req.user, req.user.gymIds);
   }
 
+  @Get(":id/deletion-summary")
+  deletionSummary(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
+    return this.gymsService.deletionSummary(id, req.user);
+  }
+
   @Delete(":id")
-  remove(@Param("id") id: string, @Req() req: AuthenticatedRequest) {
-    return this.gymsService.remove(id, req.user.gymIds);
+  remove(
+    @Param("id") id: string,
+    @Body() body: GymDeleteInput,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.gymsService.remove(id, body, req.user);
   }
 }

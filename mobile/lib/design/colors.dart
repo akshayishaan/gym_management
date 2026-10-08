@@ -22,8 +22,17 @@ class LatoColors {
   /// Slightly lifted card / sheet surface.
   static const Color surfaceDark = Color(0xFF141414);
 
+  /// Raised element on a card: icon tiles, inputs, chips.
+  static const Color surfaceRaisedDark = Color(0xFF1C1C1C);
+
+  /// Selected rows and pressed cards.
+  static const Color surfaceHighestDark = Color(0xFF242424);
+
   /// Card border (subtle).
   static const Color borderDark = Color(0xFF262626);
+
+  /// Outlined buttons and other borders that need to read above [borderDark].
+  static const Color borderStrongDark = Color(0xFF333333);
 
   // --- Surfaces (light theme) ---
   static const Color bgLight = Color(0xFFFAFAFA);
@@ -33,8 +42,10 @@ class LatoColors {
   // --- Text ---
   /// Primary text on dark.
   static const Color textPrimaryDark = Color(0xFFFFFFFF);
+
   /// Secondary text on dark — captions, sub-labels.
   static const Color textSecondaryDark = Color(0xFFA3A3A3);
+
   /// Disabled / hint text on dark.
   static const Color textTertiaryDark = Color(0xFF6B6B6B);
 
@@ -46,10 +57,19 @@ class LatoColors {
   // --- Status ---
   /// Active / success — used for "ACTIVE" chips and positive deltas.
   static const Color success = Color(0xFF4ADE80);
+
   /// Warning — expiring-soon chips and yellow counters.
   static const Color warning = Color(0xFFFB923C);
+
   /// Error — "X days left" warnings, voided payments.
   static const Color error = Color(0xFFEF4444);
+
   /// Info — links, secondary accents.
   static const Color info = Color(0xFF60A5FA);
+
+  // --- Tints ---
+  /// Fill for a status or brand color: the color at 20% opacity. Pair with
+  /// the solid color as the border and text so every tinted element is built
+  /// the same way instead of using a hand-picked hex.
+  static Color tint(Color color) => color.withValues(alpha: 0.2);
 }

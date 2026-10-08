@@ -21,6 +21,8 @@ export interface PlansResponse {
   total: number;
   page: number;
   limit: number;
+  /** Gym-wide plan counts, independent of the status/search filters. */
+  counts?: { all: number; active: number; inactive: number };
   summary?: {
     activePlans: number;
     activeMembers: number;

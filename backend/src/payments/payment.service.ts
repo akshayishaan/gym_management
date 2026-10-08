@@ -11,6 +11,8 @@ import { paymentActionSchema, paymentCreateSchema } from "./payment.schemas";
 interface ListParams {
   memberId?: string;
   month?: string;
+  /** Optional `paid` | `voided` | `refunded`; narrows the list and `total`, not the summary. */
+  status?: string;
   page?: string;
   limit?: string;
 }
@@ -37,6 +39,7 @@ export class PaymentsService {
     const page = Number.isFinite(parsedPage) ? Math.max(1, parsedPage) : 1;
     const limit = Number.isFinite(parsedLimit) ? Math.min(100, Math.max(1, parsedLimit)) : 20;
     const month = params.month || "";
+    const status = (["paid", "voided", "refunded"] as const).find((s) => s === params.status);
 
     const gym = await Gym.findById(gymId).select("timezone").lean();
     const timeZone = gym?.timezone || "Asia/Kolkata";
@@ -48,6 +51,8 @@ export class PaymentsService {
       query.memberId = memberId;
       summaryFilter.memberId = memberId;
     }
+
+    if (status) query.status = status;
 
     if (month) {
       const [year, monthNumber] = month.split("-").map(Number);

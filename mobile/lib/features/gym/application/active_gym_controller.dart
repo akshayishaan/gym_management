@@ -22,16 +22,16 @@ class SelectedGymIdNotifier extends Notifier<String?> {
   Future<void> select(String gymId) async {
     final store = ref.read(secureStoreProvider);
     await store.writeSelectedGymId(gymId);
+    // activeGymProvider watches this state, so it re-fetches by itself.
+    // (Invalidating it from here is a circular dependency and throws in
+    // debug builds.)
     state = gymId;
-    // Invalidate the resolved gym so the active-gym provider re-fetches.
-    ref.invalidate(activeGymProvider);
   }
 
   Future<void> clear() async {
     final store = ref.read(secureStoreProvider);
     await store.clearSelectedGymIdFallback();
     state = null;
-    ref.invalidate(activeGymProvider);
   }
 }
 

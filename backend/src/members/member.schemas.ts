@@ -30,8 +30,9 @@ export const memberCreateSchema = z.object({
   emergencyContact: z.string().max(20).optional(),
   amountPaid: z.number().min(0).optional(),
   paymentMethod: z.enum(["cash", "card", "upi", "bank_transfer", "other"]).optional(),
+  reference: z.string().max(200).trim().optional(),
 }).superRefine((value, context) => {
-  if (!value.planId && (value.membershipStart || value.amountPaid !== undefined || value.paymentMethod)) {
+  if (!value.planId && (value.membershipStart || value.amountPaid !== undefined || value.paymentMethod || value.reference)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["planId"],

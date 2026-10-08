@@ -73,7 +73,7 @@ class LatoPrimaryButton extends StatelessWidget {
       child: FilledButton(
         onPressed: disabled ? null : onPressed,
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
+          minimumSize: const Size.fromHeight(LatoSizes.button),
           backgroundColor: LatoColors.primary,
           foregroundColor: LatoColors.bgDark,
           disabledBackgroundColor: LatoColors.primary.withValues(alpha: 0.4),

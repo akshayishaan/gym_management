@@ -3,14 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/router/back_navigation.dart';
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
+import '../../../design/components/lato_fab.dart';
+import '../../../design/components/lato_sheet.dart';
 import '../../../design/components/lato_card.dart';
+import '../../../design/components/lato_compact_action_button.dart';
 import '../../../design/components/lato_empty_state.dart';
 import '../../../design/components/lato_error_state.dart';
-import '../../../design/components/lato_loading.dart';
+import '../../../design/components/lato_skeleton.dart';
 import '../../../design/components/lato_status_chip.dart';
 import '../../../design/spacing.dart';
 import '../application/plan_controller.dart';
@@ -37,6 +41,11 @@ class _PlansListScreenState extends ConsumerState<PlansListScreen> {
   String? _activeStatus; // 'active' | 'inactive' | null = "all"
   Timer? _debounce;
 
+  /// Last loaded list. A filter or search change is a new query, so while it
+  /// loads this stays on screen instead of replacing the whole page (which
+  /// would also drop the search field and its keyboard).
+  PlansResponse? _lastResponse;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -59,34 +68,16 @@ class _PlansListScreenState extends ConsumerState<PlansListScreen> {
   }
 
   Future<void> _openCreateSheet() async {
-    await showModalBottomSheet<void>(
+    await showLatoFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: LatoColors.surfaceDark,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-      ),
-      builder: (sheetCtx) => FractionallySizedBox(
-        heightFactor: 0.92,
-        child: const PlanFormSheet(),
-      ),
+      builder: (_) => const PlanFormSheet(),
     );
   }
 
   Future<void> _openEditSheet(Plan plan) async {
-    await showModalBottomSheet<void>(
+    await showLatoFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: LatoColors.surfaceDark,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-      ),
-      builder: (sheetCtx) => FractionallySizedBox(
-        heightFactor: 0.92,
-        child: PlanFormSheet(existingPlan: plan),
-      ),
+      builder: (_) => PlanFormSheet(existingPlan: plan),
     );
   }
 
@@ -97,23 +88,20 @@ class _PlansListScreenState extends ConsumerState<PlansListScreen> {
           .setActive(plan.id, next);
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update plan: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not update plan: $e')));
     }
   }
 
-  void _duplicatePlan(Plan plan) {
-    // Duplicating would mean a separate repository operation
-    // (`POST /plans/:id/duplicate`); the backend doesn't expose one yet,
-    // so the Figma Duplicate button is currently a placeholder.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Duplicate "${plan.name}" — coming soon')),
+  /// Opens the New Plan sheet pre-filled from [plan] (named "Name (Copy)").
+  Future<void> _duplicatePlan(Plan plan) async {
+    await showLatoFormSheet<void>(
+      context: context,
+      builder: (_) => PlanFormSheet(copyOf: plan),
     );
   }
 
@@ -125,52 +113,64 @@ class _PlansListScreenState extends ConsumerState<PlansListScreen> {
       status: _activeStatus,
     );
     final plansAsync = ref.watch(planListProvider(query));
+    if (plansAsync.hasValue) _lastResponse = plansAsync.value;
+    final shown = plansAsync.valueOrNull ?? _lastResponse;
 
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 56,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () => popOrGo(context, kMoreMenuRoute),
         ),
-        title: plansAsync.maybeWhen(
-          data: (page) => Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Membership Plans', style: theme.textTheme.headlineSmall),
-              const SizedBox(width: LatoSpacing.sm),
-              _CountBadge(total: page.total),
-            ],
-          ),
-          orElse: () => Text('Membership Plans', style: theme.textTheme.headlineSmall),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: _NewPlanPillButton(onTap: _openCreateSheet),
-          ),
-        ],
+        // The title sits right after the back arrow so the title, the count
+        // badge and the "New Plan" button all fit on one line.
+        titleSpacing: 0,
+        title: shown == null
+            ? Text('Membership Plans', style: theme.textTheme.headlineSmall)
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Membership Plans',
+                      style: theme.textTheme.headlineSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: LatoSpacing.sm),
+                  _CountBadge(total: shown.counts?.all ?? shown.total),
+                ],
+              ),
       ),
-      body: plansAsync.when(
-        data: (page) => _PlansListContent(
-          response: page,
-          searchController: _searchController,
-          searchQuery: _searchQuery,
-          activeStatus: _activeStatus,
-          onSearchChanged: _onSearchChanged,
-          onClearSearch: _clearSearch,
-          onSelectStatus: (s) => setState(() => _activeStatus = s),
-          onCreate: _openCreateSheet,
-          onEdit: _openEditSheet,
-          onDuplicate: _duplicatePlan,
-          onToggleActive: _toggleActive,
-        ),
-        loading: () => const LatoLoading(),
-        error: (err, _) => LatoErrorState(
-          message: err is ApiException ? err.message : 'Could not load plans.',
-          onRetry: () => ref.invalidate(planListProvider(query)),
-        ),
+      floatingActionButton: LatoFab(
+        label: 'New Plan',
+        onPressed: _openCreateSheet,
       ),
+      body: plansAsync.hasError && !plansAsync.hasValue
+          ? LatoErrorState(
+              message: plansAsync.error is ApiException
+                  ? (plansAsync.error as ApiException).message
+                  : 'Could not load plans.',
+              onRetry: () => ref.invalidate(planListProvider(query)),
+            )
+          : shown == null
+          ? const _PlansPageSkeleton()
+          : _PlansListContent(
+              response: shown,
+              loading: plansAsync.isLoading,
+              searchController: _searchController,
+              searchQuery: _searchQuery,
+              activeStatus: _activeStatus,
+              onSearchChanged: _onSearchChanged,
+              onClearSearch: _clearSearch,
+              onSelectStatus: (s) => setState(() => _activeStatus = s),
+              onCreate: _openCreateSheet,
+              onEdit: _openEditSheet,
+              onDuplicate: _duplicatePlan,
+              onToggleActive: _toggleActive,
+            ),
     );
   }
 }
@@ -190,35 +190,11 @@ class _CountBadge extends StatelessWidget {
         border: Border.all(color: LatoColors.primary, width: 1),
       ),
       child: Text(
-        NumberFormat.decimalPattern().format(total),
+        formatInrWhole(total),
         style: const TextStyle(
           color: LatoColors.primary,
           fontSize: 12,
           fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-/// Lime "+ New Plan" pill in the AppBar (44×44 square with + icon, matching
-/// the Members screen's add button).
-class _NewPlanPillButton extends StatelessWidget {
-  const _NewPlanPillButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: LatoColors.primary,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: const SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(Icons.add, color: LatoColors.bgDark, size: 24),
         ),
       ),
     );
@@ -230,6 +206,7 @@ class _NewPlanPillButton extends StatelessWidget {
 class _PlansListContent extends StatelessWidget {
   const _PlansListContent({
     required this.response,
+    required this.loading,
     required this.searchController,
     required this.searchQuery,
     required this.activeStatus,
@@ -243,6 +220,9 @@ class _PlansListContent extends StatelessWidget {
   });
 
   final PlansResponse response;
+
+  /// A new query is loading: the page stays, the list shows skeleton cards.
+  final bool loading;
   final TextEditingController searchController;
   final String searchQuery;
   final String? activeStatus;
@@ -262,8 +242,10 @@ class _PlansListContent extends StatelessWidget {
         .where((p) => p.isActive && (p.stats?.activeMembers ?? 0) > 0)
         .toList();
     if (active.length < 2) return null;
-    active.sort((a, b) =>
-        (b.stats?.activeMembers ?? 0).compareTo(a.stats?.activeMembers ?? 0));
+    active.sort(
+      (a, b) =>
+          (b.stats?.activeMembers ?? 0).compareTo(a.stats?.activeMembers ?? 0),
+    );
     // Only flag when there's a clear lead (>= 1.2x the next) — avoids
     // surfacing the pill when every plan is essentially tied.
     if (active.length >= 2 &&
@@ -276,9 +258,10 @@ class _PlansListContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeCount = response.summary?.activePlans ?? 0;
-    final inactiveCount =
-        (response.total - activeCount).clamp(0, response.total);
+    final counts = response.counts;
+    final allCount = counts?.all ?? response.total;
+    final activeCount = counts?.active ?? 0;
+    final inactiveCount = counts?.inactive ?? 0;
     final plans = response.plans;
     final isFiltering = (activeStatus != null) || searchQuery.isNotEmpty;
     final mostUsedId = _mostUsedPlanId();
@@ -297,28 +280,28 @@ class _PlansListContent extends StatelessWidget {
         ),
         // Status filter pills
         SizedBox(
-          height: 40,
+          height: 48,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: LatoSpacing.xl),
             children: [
               _StatusPill(
+                label: 'All ($allCount)',
+                selected: activeStatus == null,
+                onTap: () => onSelectStatus(null),
+              ),
+              const SizedBox(width: LatoSpacing.sm),
+              _StatusPill(
                 label: 'Active ($activeCount)',
                 selected: activeStatus == 'active',
-                onTap: () => onSelectStatus(
-                  activeStatus == 'active' ? null : 'active',
-                ),
+                onTap: () => onSelectStatus('active'),
               ),
               const SizedBox(width: LatoSpacing.sm),
               _StatusPill(
                 label: 'Paused ($inactiveCount)',
                 selected: activeStatus == 'inactive',
-                onTap: () => onSelectStatus(
-                  activeStatus == 'inactive' ? null : 'inactive',
-                ),
+                onTap: () => onSelectStatus('inactive'),
               ),
-              const SizedBox(width: LatoSpacing.sm),
-              _FilterIconButton(onTap: () {}),
             ],
           ),
         ),
@@ -340,16 +323,16 @@ class _PlansListContent extends StatelessWidget {
         ),
         // List body
         Expanded(
-          child: plans.isEmpty
+          child: loading
+              ? const _PlansSkeletonList()
+              : plans.isEmpty
               ? Center(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(LatoSpacing.lg),
                     child: LatoEmptyState(
                       icon: Icons.card_membership_outlined,
                       title: isFiltering ? 'No plans match' : 'No plans yet',
-                      body: isFiltering
-                          ? 'Try a different search or filter.'
-                          : 'Create your first plan to start selling memberships.',
+                      body: isFiltering ? 'Try a different search or filter.' : 'Create your first plan to start selling memberships.',
                       actionLabel: 'Create Plan',
                       onAction: onCreate,
                     ),
@@ -360,7 +343,7 @@ class _PlansListContent extends StatelessWidget {
                     LatoSpacing.xl,
                     0,
                     LatoSpacing.xl,
-                    LatoSpacing.xxl,
+                    LatoSpacing.fabClearance,
                   ),
                   itemCount: plans.length,
                   itemBuilder: (context, index) {
@@ -411,11 +394,25 @@ class _RevenueKpiCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: LatoSpacing.sm),
-          Text(
-            _formatCurrency(revenue),
-            style: theme.textTheme.displayMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '₹${formatInrWhole(revenue.truncate())}',
+                style: theme.textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 4),
+                child: Text(
+                  '.${((revenue - revenue.truncate()).abs() * 100).round().toString().padLeft(2, '0')}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: LatoSpacing.lg),
           Row(
@@ -423,7 +420,7 @@ class _RevenueKpiCard extends StatelessWidget {
               Expanded(
                 child: _KpiSubStat(
                   label: 'Sales Volume',
-                  value: '${NumberFormat.decimalPattern().format(sales)} sold',
+                  value: '${formatInrWhole(sales)} sold',
                   valueColor: theme.textTheme.bodyMedium?.color,
                 ),
               ),
@@ -431,8 +428,7 @@ class _RevenueKpiCard extends StatelessWidget {
               Expanded(
                 child: _KpiSubStat(
                   label: 'Active Members',
-                  value:
-                      '${NumberFormat.decimalPattern().format(active)} active',
+                  value: '${formatInrWhole(active)} active',
                   valueColor: LatoColors.primary,
                 ),
               ),
@@ -479,14 +475,6 @@ class _KpiSubStat extends StatelessWidget {
   }
 }
 
-String _formatCurrency(double value) {
-  final whole = value.truncate();
-  final cents =
-      ((value - whole).abs() * 100).round().toString().padLeft(2, '0');
-  final formattedWhole = NumberFormat.decimalPattern().format(whole);
-  return '\$$formattedWhole.$cents';
-}
-
 /// Filter pill used in the status row.
 class _StatusPill extends StatelessWidget {
   const _StatusPill({
@@ -505,40 +493,14 @@ class _StatusPill extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
-        child: LatoStatusChip(
-          label: label,
-          tone: selected ? LatoChipTone.primary : LatoChipTone.neutral,
-        ),
-      ),
-    );
-  }
-}
-
-/// Trailing filter icon button on the status row.
-class _FilterIconButton extends StatelessWidget {
-  const _FilterIconButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: const Color(0x1AFFFFFF),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: LatoColors.borderDark),
-          ),
-          child: const Icon(
-            Icons.tune,
-            size: 18,
-            color: LatoColors.textSecondaryDark,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Center(
+            widthFactor: 1,
+            child: LatoStatusChip(
+              label: label,
+              tone: selected ? LatoChipTone.primary : LatoChipTone.neutral,
+            ),
           ),
         ),
       ),
@@ -566,7 +528,7 @@ class _SearchBar extends StatelessWidget {
       onChanged: onChanged,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Search plan name, tier, or access code...',
+        hintText: 'Search plans',
         prefixIcon: const Icon(
           Icons.search,
           size: 20,
@@ -620,191 +582,207 @@ class _PlanCard extends StatelessWidget {
       button: true,
       label: 'Plan ${plan.name}',
       child: LatoCard(
-      onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(
-        LatoSpacing.lg,
-        LatoSpacing.lg,
-        LatoSpacing.lg,
-        LatoSpacing.md,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row 1: name + (optional) MOST USED pill + price
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        plan.name,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (isMostUsed) ...[
-                      const SizedBox(width: LatoSpacing.sm),
-                      const LatoStatusChip(
-                        label: 'MOST USED',
-                        tone: LatoChipTone.primary,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: LatoSpacing.sm),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: plan.formattedPrice,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        color: LatoColors.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    TextSpan(
-                      text: '  / ${plan.durationDays} days',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: LatoSpacing.md),
-          // 3-column stats sub-card
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: LatoSpacing.md,
-              vertical: LatoSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              color: LatoColors.bgDark,
-              borderRadius: BorderRadius.circular(LatoRadius.md),
-            ),
-            child: Row(
+        onTap: onTap,
+        padding: const EdgeInsets.fromLTRB(
+          LatoSpacing.lg,
+          LatoSpacing.lg,
+          LatoSpacing.lg,
+          LatoSpacing.md,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Row 1: name + (optional) MOST USED pill + price
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: _StatCell(
-                    label: 'Members',
-                    value: NumberFormat.decimalPattern()
-                        .format(stats?.activeMembers ?? 0),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          plan.name,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isMostUsed) ...[
+                        const SizedBox(width: LatoSpacing.sm),
+                        const LatoStatusChip(
+                          label: 'MOST USED',
+                          tone: LatoChipTone.primary,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                const _StatDivider(),
-                Expanded(
-                  child: _StatCell(
-                    label: 'YTD Sales',
-                    value: NumberFormat.decimalPattern()
-                        .format(stats?.salesYtd ?? 0),
-                  ),
-                ),
-                const _StatDivider(),
-                Expanded(
-                  child: _StatCell(
-                    label: 'YTD Revenue',
-                    value: _formatRevenue(stats?.revenueAtSaleYtd ?? 0),
-                    valueColor: LatoColors.primary,
+                const SizedBox(width: LatoSpacing.sm),
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: plan.formattedPrice,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          color: LatoColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      TextSpan(
+                        text: '  / ${plan.durationDays} days',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          // Feature chips
-          if (plan.features.isNotEmpty) ...[
             const SizedBox(height: LatoSpacing.md),
-            Wrap(
-              spacing: LatoSpacing.sm,
-              runSpacing: LatoSpacing.sm,
+            // 3-column stats sub-card
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: LatoSpacing.md,
+                vertical: LatoSpacing.md,
+              ),
+              decoration: BoxDecoration(
+                color: LatoColors.bgDark,
+                borderRadius: BorderRadius.circular(LatoRadius.md),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _StatCell(
+                      rightInset: true,
+                      label: 'Members',
+                      value: formatInrWhole(stats?.activeMembers ?? 0),
+                    ),
+                  ),
+                  const _StatDivider(),
+                  Expanded(
+                    child: _StatCell(
+                      leftInset: true,
+                      label: 'YTD Sales',
+                      value: formatInrWhole(stats?.salesYtd ?? 0),
+                    ),
+                  ),
+                  const _StatDivider(),
+                  Expanded(
+                    child: _StatCell(
+                      leftInset: true,
+                      label: 'YTD Revenue',
+                      value: _formatRevenue(stats?.revenueAtSaleYtd ?? 0),
+                      valueColor: LatoColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Feature chips
+            if (plan.features.isNotEmpty) ...[
+              const SizedBox(height: LatoSpacing.md),
+              Wrap(
+                spacing: LatoSpacing.sm,
+                runSpacing: LatoSpacing.sm,
+                children: [
+                  for (final f in plan.features)
+                    LatoStatusChip(label: f, tone: LatoChipTone.neutral),
+                ],
+              ),
+            ],
+            const SizedBox(height: LatoSpacing.md),
+            // Bottom action row
+            Row(
               children: [
-                for (final f in plan.features) _FeatureChip(label: f),
+                LatoCompactActionButton(
+                  label: 'Edit',
+                  color: LatoColors.textPrimaryDark,
+                  borderColor: LatoColors.borderStrongDark,
+                  onTap: onEdit,
+                ),
+                const SizedBox(width: LatoSpacing.sm),
+                LatoCompactActionButton(
+                  label: 'Duplicate',
+                  color: LatoColors.textPrimaryDark,
+                  borderColor: LatoColors.borderStrongDark,
+                  onTap: onDuplicate,
+                ),
+                const Spacer(),
+                Text('Active', style: theme.textTheme.labelLarge),
+                const SizedBox(width: LatoSpacing.sm),
+                Switch.adaptive(
+                  value: plan.isActive,
+                  onChanged: onToggleActive,
+                  activeThumbColor: LatoColors.primary,
+                  activeTrackColor: LatoColors.primary.withValues(alpha: 0.35),
+                  inactiveThumbColor: LatoColors.textSecondaryDark,
+                  inactiveTrackColor: LatoColors.textSecondaryDark.withValues(
+                    alpha: 0.25,
+                  ),
+                ),
               ],
             ),
           ],
-          const SizedBox(height: LatoSpacing.md),
-          // Bottom action row
-          Row(
-            children: [
-              _SmallActionButton(
-                icon: Icons.edit_outlined,
-                label: 'Edit',
-                onTap: onEdit,
-              ),
-              const SizedBox(width: LatoSpacing.sm),
-              _SmallActionButton(
-                icon: Icons.content_copy_outlined,
-                label: 'Duplicate',
-                onTap: onDuplicate,
-              ),
-              const Spacer(),
-              Text(
-                'Active',
-                style: theme.textTheme.labelLarge,
-              ),
-              const SizedBox(width: LatoSpacing.sm),
-              Switch.adaptive(
-                value: plan.isActive,
-                onChanged: onToggleActive,
-                activeThumbColor: LatoColors.primary,
-                activeTrackColor:
-                    LatoColors.primary.withValues(alpha: 0.35),
-                inactiveThumbColor: LatoColors.textSecondaryDark,
-                inactiveTrackColor:
-                    LatoColors.textSecondaryDark.withValues(alpha: 0.25),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
       ),
     );
   }
 }
 
-/// $142,400 / $342,850.00 style compact currency for the sub-card.
-String _formatRevenue(double value) {
-  final whole = value.truncate();
-  return '\$${NumberFormat.decimalPattern().format(whole)}';
-}
+/// Whole-rupee amount for the stats sub-card, e.g. `₹1,42,400`.
+String _formatRevenue(double value) => '₹${formatInrWhole(value.truncate())}';
 
 class _StatCell extends StatelessWidget {
   const _StatCell({
     required this.label,
     required this.value,
     this.valueColor,
+    this.leftInset = false,
+    this.rightInset = false,
   });
   final String label;
   final String value;
   final Color? valueColor;
 
+  /// Space after the divider so the text does not touch it.
+  final bool leftInset;
+
+  /// Space before the divider on the first cell.
+  final bool rightInset;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            letterSpacing: 0.6,
+    return Padding(
+      padding: EdgeInsets.only(
+        left: leftInset ? LatoSpacing.md : 0,
+        right: rightInset ? LatoSpacing.sm : 0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              letterSpacing: 0.2,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: valueColor,
-            fontWeight: FontWeight.w700,
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: valueColor,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -813,76 +791,166 @@ class _StatDivider extends StatelessWidget {
   const _StatDivider();
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 32,
-      color: LatoColors.borderDark,
-    );
+    return Container(width: 1, height: 32, color: LatoColors.borderDark);
   }
 }
 
-/// Small lime-tinted feature chip used inside the plan card.
-class _FeatureChip extends StatelessWidget {
-  const _FeatureChip({required this.label});
-  final String label;
+/// First-load placeholder for the whole page: revenue card, filter pills,
+/// search bar and the card list, so the layout is already in place when the
+/// data arrives.
+class _PlansPageSkeleton extends StatelessWidget {
+  const _PlansPageSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: LatoSpacing.md,
-        vertical: LatoSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: LatoColors.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: LatoColors.primary.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: LatoColors.primary,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+    return ExcludeSemantics(
+      child: Column(
+        key: const Key('plans-page-skeleton'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+              LatoSpacing.xl,
+              LatoSpacing.sm,
+              LatoSpacing.xl,
+              LatoSpacing.md,
+            ),
+            child: LatoCard(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LatoSkeletonBlock(width: 140, height: 12),
+                  SizedBox(height: LatoSpacing.sm),
+                  LatoSkeletonBlock(width: 180, height: 44),
+                  SizedBox(height: LatoSpacing.lg),
+                  Row(
+                    children: [
+                      LatoSkeletonBlock(width: 96, height: 32),
+                      SizedBox(width: LatoSpacing.lg),
+                      LatoSkeletonBlock(width: 96, height: 32),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 48,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: LatoSpacing.xl),
+              children: const [
+                LatoSkeletonBlock(width: 72, height: 36, radius: LatoRadius.pill),
+                SizedBox(width: LatoSpacing.sm),
+                LatoSkeletonBlock(width: 88, height: 36, radius: LatoRadius.pill),
+                SizedBox(width: LatoSpacing.sm),
+                LatoSkeletonBlock(width: 88, height: 36, radius: LatoRadius.pill),
+              ],
+            ),
+          ),
+          const SizedBox(height: LatoSpacing.md),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+              LatoSpacing.xl,
+              0,
+              LatoSpacing.xl,
+              LatoSpacing.md,
+            ),
+            child: LatoSkeletonBlock(height: 48, radius: LatoRadius.md),
+          ),
+          const Expanded(child: _PlansSkeletonList()),
+        ],
       ),
     );
   }
 }
 
-/// Small `Edit` / `Duplicate` text+icon button on the bottom of the plan
-/// card. Lighter visual weight than a full TextButton so the card row
-/// stays balanced.
-class _SmallActionButton extends StatelessWidget {
-  const _SmallActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+/// Placeholder list shown while a new filter or search loads. Same card
+/// padding and block heights as [_PlanCard], so the layout does not jump.
+class _PlansSkeletonList extends StatelessWidget {
+  const _PlansSkeletonList();
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 16),
-      label: Text(label),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(
-          horizontal: LatoSpacing.sm,
-          vertical: LatoSpacing.xs,
+    return ListView(
+      key: const Key('plans-skeleton'),
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(
+        LatoSpacing.xl,
+        0,
+        LatoSpacing.xl,
+        LatoSpacing.fabClearance,
+      ),
+      children: const [
+        _PlanCardSkeleton(),
+        SizedBox(height: LatoSpacing.md),
+        _PlanCardSkeleton(),
+      ],
+    );
+  }
+}
+
+class _PlanCardSkeleton extends StatelessWidget {
+  const _PlanCardSkeleton();
+
+  static Widget _block(double? width, double height, [double radius = 8]) =>
+      Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: LatoColors.surfaceRaisedDark,
+          borderRadius: BorderRadius.circular(radius),
         ),
-        minimumSize: const Size(0, 32),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor: LatoColors.textPrimaryDark,
-        textStyle: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: LatoCard(
+        padding: const EdgeInsets.fromLTRB(
+          LatoSpacing.lg,
+          LatoSpacing.lg,
+          LatoSpacing.lg,
+          LatoSpacing.md,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [_block(120, 22), _block(110, 28)],
+            ),
+            const SizedBox(height: LatoSpacing.md),
+            Container(
+              height: 66,
+              decoration: BoxDecoration(
+                color: LatoColors.bgDark,
+                borderRadius: BorderRadius.circular(LatoRadius.md),
+              ),
+            ),
+            const SizedBox(height: LatoSpacing.md),
+            Row(
+              children: [
+                _block(96, 28, LatoRadius.pill),
+                const SizedBox(width: LatoSpacing.sm),
+                _block(120, 28, LatoRadius.pill),
+              ],
+            ),
+            const SizedBox(height: LatoSpacing.md),
+            Row(
+              children: [
+                _block(64, 36, LatoRadius.md),
+                const SizedBox(width: LatoSpacing.sm),
+                _block(96, 36, LatoRadius.md),
+                const Spacer(),
+                _block(52, 30, LatoRadius.pill),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 }
-

@@ -6,14 +6,17 @@ import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/utils/contact_launcher.dart';
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
 import '../../../design/components/lato_card.dart';
 import '../../../design/components/lato_empty_state.dart';
 import '../../../design/components/lato_error_state.dart';
-import '../../../design/components/lato_loading.dart';
+import '../../../design/components/lato_skeleton.dart';
+import '../../../design/components/lato_sheet.dart';
 import '../../../design/components/lato_status_chip.dart';
 import '../../../design/spacing.dart';
 import '../../gym/application/active_gym_controller.dart';
+import '../../gym/presentation/gym_switcher_sheet.dart';
 import '../../payments/presentation/payment_form_sheet.dart';
 import '../data/dashboard_repository.dart';
 import '../domain/dashboard_data.dart';
@@ -59,6 +62,8 @@ class _GymPickerChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    // Prefetch the gym list so the switcher sheet opens at its final height.
+    ref.watch(userGymsProvider);
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(999),
@@ -67,16 +72,7 @@ class _GymPickerChip extends ConsumerWidget {
         label: 'Switch active gym',
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
-          onTap: () {
-            // Phase 9 wires this to the gym picker bottom sheet. For now
-            // we just navigate to /gym/picker which the router allows for
-            // authenticated multi-gym users.
-            // ignore: use_build_context_synchronously
-            final router = GoRouter.of(context);
-            if (router.canPop()) {
-              router.go('/gym/picker');
-            }
-          },
+          onTap: () => showGymSwitcherSheet(context),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
@@ -91,14 +87,18 @@ class _GymPickerChip extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                     ),
-                    loading: () => Text(
-                      'RepiX',
-                      style: theme.textTheme.titleSmall,
+                    loading: () => Container(
+                      width: 80,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.3,
+                        ),
+                        borderRadius: BorderRadius.circular(LatoRadius.sm),
+                      ),
                     ),
-                    error: (_, _) => Text(
-                      'RepiX',
-                      style: theme.textTheme.titleSmall,
-                    ),
+                    error: (_, _) =>
+                        Text('RepiX', style: theme.textTheme.titleSmall),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -123,11 +123,129 @@ class _DashboardBody extends ConsumerWidget {
     final async = ref.watch(dashboardProvider);
     return async.when(
       data: (data) => _DashboardContent(data: data),
-      loading: () => const LatoLoading(),
+      loading: () => const _DashboardSkeleton(),
       error: (err, _) => LatoErrorState(
-        message: err is ApiException ? err.message : 'Could not load dashboard.',
+        message: err is ApiException
+            ? err.message
+            : 'Could not load dashboard.',
         onRetry: () => ref.invalidate(dashboardProvider),
       ),
+    );
+  }
+}
+
+/// Placeholder for [_DashboardContent]: same section order, padding and block
+/// heights (revenue card, KPI row, quick operations, two list sections).
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  static const _gap = SizedBox(height: 16);
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: ListView(
+        key: const Key('dashboard-skeleton'),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          const LatoCard(
+            padding: EdgeInsets.fromLTRB(20, 18, 20, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LatoSkeletonBlock(width: 120, height: 12),
+                SizedBox(height: 8),
+                LatoSkeletonBlock(width: 190, height: 44),
+              ],
+            ),
+          ),
+          _gap,
+          Row(
+            children: [
+              for (var i = 0; i < 3; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                const Expanded(
+                  child: LatoCard(
+                    padding: EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LatoSkeletonBlock(width: 56, height: 28),
+                        SizedBox(height: 6),
+                        LatoSkeletonBlock(width: 40, height: 28),
+                        SizedBox(height: 6),
+                        LatoSkeletonBlock(width: 52, height: 20, radius: 999),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 24),
+          const LatoSkeletonBlock(width: 120, height: 12),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                const Expanded(
+                  child: LatoSkeletonBlock(height: 96, radius: 16),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 24),
+          const _DashboardSectionSkeleton(),
+          _gap,
+          const _DashboardSectionSkeleton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardSectionSkeleton extends StatelessWidget {
+  const _DashboardSectionSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: const Align(
+            alignment: Alignment.centerLeft,
+            child: LatoSkeletonBlock(width: 140, height: 20),
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (var i = 0; i < 2; i++) ...[
+          const LatoCard(
+            child: Row(
+              children: [
+                LatoSkeletonBlock(width: 44, height: 44, radius: 22),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LatoSkeletonBlock(width: 150, height: 16),
+                      SizedBox(height: 6),
+                      LatoSkeletonBlock(width: 110, height: 12),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                LatoSkeletonBlock(width: 64, height: 20),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 }
@@ -147,17 +265,12 @@ class _DashboardContent extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           // Still render the revenue card so the user sees the shape.
-          _RevenueCard(
-            revenue: data.monthRevenue,
-            deltaPct: null,
-            isSynthetic: false,
-          ),
+          _RevenueCard(revenue: data.monthRevenue),
           const SizedBox(height: 16),
           LatoEmptyState(
             icon: Icons.dashboard_outlined,
             title: 'No activity yet',
-            body:
-                'Members, plans, and payments will appear here as soon as you start adding them.',
+            body: 'Members, plans, and payments will appear here as soon as you start adding them.',
             actionLabel: 'Add a member',
             onAction: () => context.go('/members'),
           ),
@@ -171,46 +284,51 @@ class _DashboardContent extends ConsumerWidget {
       children: [
         _RevenueCard(
           revenue: data.monthRevenue,
-          deltaPct: _revenueDeltaPct(data),
-          isSynthetic: data.isRevenueDeltaSynthetic,
+          comparison: data.monthRevenueComparison,
         ),
         const SizedBox(height: 16),
         _KpiRow(data: data),
         const SizedBox(height: 24),
-        Text('QUICK OPERATIONS',
-            style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.4)),
+        Text(
+          'QUICK OPERATIONS',
+          style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.4),
+        ),
         const SizedBox(height: 12),
         _QuickOpsRow(),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: Text('Expiring Soon',
-                  style: theme.textTheme.titleLarge),
-            ),
-            TextButton(
-              onPressed: () => context.go('/members'),
-              child: Text('View All (${data.expiringMembers})'),
-            ),
-          ],
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Expiring Soon', style: theme.textTheme.titleLarge),
+              ),
+              if (data.expiringMembers > 0)
+                TextButton(
+                  onPressed: () => context.go('/members'),
+                  child: Text('View All (${data.expiringMembers})'),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         if (data.expiringList.isEmpty)
-          LatoEmptyState(
+          const _CompactEmpty(
             icon: Icons.event_busy_outlined,
             title: 'No memberships expiring soon',
           )
         else
-          ...data.expiringList.map((m) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _ExpiringRow(member: m),
-              )),
+          ...data.expiringList.map(
+            (m) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _ExpiringRow(member: m),
+            ),
+          ),
         const SizedBox(height: 16),
         Row(
           children: [
             Expanded(
-              child: Text('Recent Payments',
-                  style: theme.textTheme.titleLarge),
+              child: Text('Recent Payments', style: theme.textTheme.titleLarge),
             ),
             TextButton(
               onPressed: () => context.go('/payments'),
@@ -220,87 +338,133 @@ class _DashboardContent extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         if (data.recentPayments.isEmpty)
-          LatoEmptyState(
+          const _CompactEmpty(
             icon: Icons.receipt_long_outlined,
             title: 'No recent payments recorded',
           )
         else
-          ...data.recentPayments.map((p) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _RecentPaymentRow(payment: p),
-              )),
+          ...data.recentPayments.map(
+            (p) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _RecentPaymentRow(payment: p),
+            ),
+          ),
         const SizedBox(height: 32),
       ],
     );
   }
+}
 
-  /// Returns the month-over-month revenue delta. The repository fills in
-  /// a stable synthetic value when the backend doesn't ship one, so this
-  /// always returns a usable number for the chip.
-  double? _revenueDeltaPct(DashboardData data) {
-    return data.monthRevenueDeltaPct;
+/// One-row empty state for dashboard sections. The full [LatoEmptyState]
+/// stays for the whole-screen empty branch.
+class _CompactEmpty extends StatelessWidget {
+  const _CompactEmpty({required this.icon, required this.title});
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LatoCard(
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: LatoColors.surfaceRaisedDark,
+              borderRadius: BorderRadius.circular(LatoRadius.sm),
+            ),
+            child: Icon(icon, size: 18, color: LatoColors.textSecondaryDark),
+          ),
+          const SizedBox(width: LatoSpacing.md),
+          Expanded(
+            child: Text(
+              title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
+/// Colour for a change against last month: green up, red down, muted flat.
+/// One shared set of colours for every comparison on the dashboard.
+Color _trendColor(BuildContext context, num change) {
+  if (change > 0) return LatoColors.success;
+  if (change < 0) return LatoColors.error;
+  return Theme.of(context).colorScheme.onSurfaceVariant;
+}
+
+String _signed(String value, num change) =>
+    change > 0 ? '+$value' : (change < 0 ? '\u2212$value' : value);
+
+/// `12.4%` under 10, `38%` from 10 up.
+String _formatPct(double pct) {
+  final abs = pct.abs();
+  return '${abs.toStringAsFixed(abs >= 10 ? 0 : 1)}%';
+}
+
 class _RevenueCard extends StatelessWidget {
-  const _RevenueCard({
-    required this.revenue,
-    required this.deltaPct,
-    required this.isSynthetic,
-  });
+  const _RevenueCard({required this.revenue, this.comparison});
   final double revenue;
-  final double? deltaPct;
-  final bool isSynthetic;
+  final Comparison? comparison;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final whole = revenue.truncate();
-    final cents = ((revenue - whole).abs() * 100).round().toString().padLeft(2, '0');
-    final formattedWhole = NumberFormat.decimalPattern().format(whole);
+    final cents = ((revenue - whole).abs() * 100).round().toString().padLeft(
+      2,
+      '0',
+    );
+    final formattedWhole = formatInrWhole(whole);
 
+    final cmp = comparison;
     Widget? deltaChip;
-    if (deltaPct != null) {
-      final isUp = deltaPct! >= 0;
-      final chipColor = isUp ? LatoColors.primary : LatoColors.error;
-      final chip = Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: chipColor.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: chipColor),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${isUp ? '+' : '−'}${deltaPct!.abs().toStringAsFixed(1)}%',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: chipColor,
-                fontWeight: FontWeight.w700,
+    if (cmp != null) {
+      final color = _trendColor(context, cmp.change);
+      // Last month at zero has no base for a ratio; any revenue then reads
+      // as +100%, the usual convention.
+      final pct = cmp.percent ?? (cmp.change > 0 ? 100.0 : 0.0);
+      final up = cmp.change > 0;
+      final down = cmp.change < 0;
+      final label = _signed(_formatPct(pct), cmp.change);
+      deltaChip = Tooltip(
+        message: 'Last month: ${formatInr(cmp.previous, decimals: 0)}',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: LatoColors.tint(color),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(width: 2),
-            Icon(
-              isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-              size: 16,
-              color: chipColor,
-            ),
-          ],
+              if (up || down) ...[
+                const SizedBox(width: 2),
+                Icon(
+                  up ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                  size: 16,
+                  color: color,
+                ),
+              ],
+            ],
+          ),
         ),
       );
-      // Flag synthetic values with reduced emphasis so users don't take
-      // them as ground-truth figures until the backend ships the real one.
-      deltaChip = isSynthetic
-          ? Opacity(
-                  opacity: 0.6,
-                  child: Tooltip(
-                    message: 'Demo data',
-                    child: chip,
-                  ),
-                )
-          : chip;
     }
 
     return LatoCard(
@@ -326,16 +490,20 @@ class _RevenueCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('\$$formattedWhole',
-                  style: theme.textTheme.displayMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  )),
+              Text(
+                '₹$formattedWhole',
+                style: theme.textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('.$cents',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    )),
+                child: Text(
+                  '.$cents',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
             ],
           ),
@@ -351,41 +519,41 @@ class _KpiRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalDelta = data.totalMembers - data.activeMembers;
-    final retention =
-        data.totalMembers == 0 ? null : (data.activeMembers / data.totalMembers) * 100;
-    return Row(
-      children: [
-        Expanded(
-          child: _KpiTile(
-            title: 'Total\nMembers',
-            value: data.totalMembers,
-            footer: totalDelta == 0 ? null : '+$totalDelta wk',
-            footerTone: LatoChipTone.primary,
+    // IntrinsicHeight + stretch keeps the three tiles equal height even if a
+    // footer wraps (large system font, longer label).
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _KpiTile(
+              title: 'Total\nMembers',
+              value: data.totalMembers,
+              comparison: data.totalMembersComparison,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _KpiTile(
-            title: 'Active\nMembers',
-            value: data.activeMembers,
-            footer: retention == null
-                ? null
-                : '${retention.toStringAsFixed(0)}% ret',
-            footerTone: LatoChipTone.primary,
+          const SizedBox(width: 12),
+          Expanded(
+            child: _KpiTile(
+              title: 'Active\nMembers',
+              value: data.activeMembers,
+              comparison: data.activeMembersComparison,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _KpiTile(
-            title: 'Expiring\nSoon',
-            value: data.expiringMembers,
-            footer: data.expiringMembers == 0 ? null : '7 days',
-            footerTone: LatoChipTone.warning,
-            highlight: true,
+          const SizedBox(width: 12),
+          Expanded(
+            child: _KpiTile(
+              title: 'Expiring\nSoon',
+              value: data.expiringMembers,
+              footer: data.expiringMembers == 0 ? 'All clear' : '7 days',
+              footerTone: data.expiringMembers == 0
+                  ? LatoChipTone.neutral
+                  : LatoChipTone.warning,
+              highlight: data.expiringMembers > 0,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -394,6 +562,7 @@ class _KpiTile extends StatelessWidget {
   const _KpiTile({
     required this.title,
     required this.value,
+    this.comparison,
     this.footer,
     this.footerTone = LatoChipTone.neutral,
     this.highlight = false,
@@ -401,6 +570,9 @@ class _KpiTile extends StatelessWidget {
 
   final String title;
   final int value;
+
+  /// Change against last month; shown as `+2 (+100%)` in the footer slot.
+  final Comparison? comparison;
   final String? footer;
   final LatoChipTone footerTone;
   final bool highlight;
@@ -443,14 +615,21 @@ class _KpiTile extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (comparison != null) ...[
+            const SizedBox(height: 6),
+            _ComparisonFooter(comparison: comparison!),
+          ],
           if (footer != null) ...[
             const SizedBox(height: 6),
             Text(
               footer!,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: footerTone == LatoChipTone.warning
-                    ? LatoColors.warning
-                    : LatoColors.primary,
+                color: switch (footerTone) {
+                  LatoChipTone.warning => LatoColors.warning,
+                  LatoChipTone.success => LatoColors.success,
+                  LatoChipTone.neutral => theme.colorScheme.onSurfaceVariant,
+                  _ => LatoColors.primary,
+                },
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -461,22 +640,45 @@ class _KpiTile extends StatelessWidget {
   }
 }
 
+/// The tile footer for a comparison: `+2 (+100%)` in the trend colour, one
+/// line like the other footers. Long-press shows last month's figure.
+class _ComparisonFooter extends StatelessWidget {
+  const _ComparisonFooter({required this.comparison});
+  final Comparison comparison;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final change = comparison.change;
+    // Same rule as the revenue chip: a zero base reads as +100%.
+    final pct = comparison.percent ?? (change > 0 ? 100.0 : 0.0);
+    final changeText = _signed(change.abs().toInt().toString(), change);
+    final text = '$changeText (${_signed(_formatPct(pct), change)})';
+    return Tooltip(
+      message: 'Last month: ${comparison.previous}',
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text,
+          maxLines: 1,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: _trendColor(context, change),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Opens the same [PaymentFormSheet] used by the Payments screen's "+"
 /// button, with no pre-selected member (the sheet's own member picker
 /// handles that). Shared by the "Record Pay" quick-op tile here.
 Future<void> _openRecordPaymentSheet(BuildContext context) async {
-  await showModalBottomSheet<void>(
+  await showLatoFormSheet<void>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: LatoColors.surfaceDark,
-    useSafeArea: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-    ),
-    builder: (sheetCtx) => const FractionallySizedBox(
-      heightFactor: 0.92,
-      child: PaymentFormSheet(),
-    ),
+    builder: (_) => const PaymentFormSheet(),
   );
 }
 
@@ -487,22 +689,22 @@ class _QuickOpsRow extends StatelessWidget {
       children: [
         _QuickOpTile(
           assetPath: 'assets/icons/quickop_add_member.svg',
+          color: LatoColors.primary,
           label: 'Add\nMember',
-          iconColor: const Color(0xFF4ADE80), // green
           onTap: () => context.go('/members'),
         ),
         const SizedBox(width: 12),
         _QuickOpTile(
           assetPath: 'assets/icons/quickop_record_pay.svg',
+          color: LatoColors.info,
           label: 'Record\nPay',
-          iconColor: LatoColors.primary, // lime
           onTap: () => _openRecordPaymentSheet(context),
         ),
         const SizedBox(width: 12),
         _QuickOpTile(
           assetPath: 'assets/icons/quickop_reminders.svg',
+          color: LatoColors.warning,
           label: 'Send\nAlerts',
-          iconColor: const Color(0xFF22D3EE), // cyan
           // No bulk-notification endpoint exists yet (backend exposes no
           // `/alerts` resource) — say so honestly rather than a silent
           // no-op, matching the Plans screen's "Duplicate — coming soon".
@@ -513,9 +715,9 @@ class _QuickOpsRow extends StatelessWidget {
         const SizedBox(width: 12),
         _QuickOpTile(
           assetPath: 'assets/icons/quickop_reports.svg',
+          color: LatoColors.textPrimaryDark,
           label: 'Reports',
-          iconColor: const Color(0xFF60A5FA), // blue
-          onTap: () => context.go('/reports'),
+          onTap: () => context.push('/reports'),
         ),
       ],
     );
@@ -525,14 +727,16 @@ class _QuickOpsRow extends StatelessWidget {
 class _QuickOpTile extends StatelessWidget {
   const _QuickOpTile({
     required this.assetPath,
+    required this.color,
     required this.label,
-    required this.iconColor,
     required this.onTap,
   });
 
   final String assetPath;
+
+  /// Icon color; the 20% tint of it fills the badge behind the icon.
+  final Color color;
   final String label;
-  final Color iconColor;
   final VoidCallback onTap;
 
   @override
@@ -554,42 +758,50 @@ class _QuickOpTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: LatoColors.borderDark),
             ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: SvgPicture.asset(
-                    assetPath,
-                    fit: BoxFit.contain,
-                    // The SVGs ship with a fill color baked in. We tint
-                    // them by overlaying a colorFilter so the brand
-                    // stays the design color in any theme.
-                    colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: LatoColors.tint(color),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SvgPicture.asset(
+                      assetPath,
+                      fit: BoxFit.contain,
+                      // The SVGs ship with a fill color baked in. We tint
+                      // them by overlaying a colorFilter so the brand
+                      // stays the design color in any theme.
+                      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  height: 1.15,
+                const SizedBox(height: 8),
+                // Two-line slot, top-aligned, so a one-line label like
+                // "Reports" keeps its icon on the same line as the others.
+                SizedBox(
+                  height: 30,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        height: 1.15,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.visible,
+                    ),
+                  ),
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.visible,
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -647,7 +859,8 @@ class _ExpiringRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     [
-                      if (member.planName != null && member.planName!.isNotEmpty)
+                      if (member.planName != null &&
+                          member.planName!.isNotEmpty)
                         member.planName,
                       member.membershipExpiry,
                     ].whereType<String>().join(' • '),
@@ -664,8 +877,9 @@ class _ExpiringRow extends StatelessWidget {
                 final phone = member.phone;
                 if (phone == null || phone.isEmpty) return;
                 final clean = phone.replaceAll(RegExp(r'\s+'), '');
-                final stripped =
-                    clean.startsWith('+') ? clean.substring(1) : clean;
+                final stripped = clean.startsWith('+')
+                    ? clean.substring(1)
+                    : clean;
                 launchContactUrl(context, 'https://wa.me/$stripped');
               },
             ),
@@ -772,9 +986,9 @@ class _RecentPaymentRow extends StatelessWidget {
               ),
             ),
             Text(
-              '+\$${payment.amount.toStringAsFixed(2)}',
+              '+${formatInr(payment.amount)}',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: LatoColors.primary,
+                color: LatoColors.success,
                 fontWeight: FontWeight.w700,
               ),
             ),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../design/colors.dart';
+import '../../../design/components/lato_sheet.dart';
 import '../../../design/components/lato_card.dart';
 import '../../../design/spacing.dart';
 import '../application/plan_controller.dart';
@@ -19,10 +20,14 @@ import '../domain/plan.dart';
 /// title becomes "Edit Plan", and the submit label switches to
 /// "SAVE CHANGES" so the wire is `PUT /plans/:id` rather than `POST /plans`.
 class PlanFormSheet extends ConsumerStatefulWidget {
-  const PlanFormSheet({super.key, this.existingPlan});
+  const PlanFormSheet({super.key, this.existingPlan, this.copyOf});
 
   /// Non-null switches the sheet into edit mode.
   final Plan? existingPlan;
+
+  /// When set (and [existingPlan] is null) the sheet opens in create mode
+  /// pre-filled from this plan, named "Name (Copy)".
+  final Plan? copyOf;
 
   bool get isEdit => existingPlan != null;
 
@@ -55,9 +60,9 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
   @override
   void initState() {
     super.initState();
-    final p = widget.existingPlan;
+    final p = widget.existingPlan ?? widget.copyOf;
     if (p != null) {
-      _nameCtrl.text = p.name;
+      _nameCtrl.text = widget.isEdit ? p.name : '${p.name} (Copy)';
       _descriptionCtrl.text = p.description ?? '';
       _priceCtrl.text = p.price == p.price.truncate()
           ? p.price.toInt().toString()
@@ -65,7 +70,7 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
       _durationCtrl.text = p.durationDays.toString();
       _durationDays = p.durationDays;
       _features.addAll(p.features);
-      _isActive = p.isActive;
+      _isActive = widget.isEdit ? p.isActive : true;
     } else {
       // Default duration = first chip; keeps the form consistent for new
       // users when they tap a chip without typing first.
@@ -104,12 +109,22 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
   void _addFeature() {
     final raw = _featureInputCtrl.text.trim();
     if (raw.isEmpty) return;
+    String? notice;
     setState(() {
-      if (!_features.contains(raw) && _features.length < 20) {
+      if (_features.contains(raw)) {
+        notice = 'Already added';
+      } else if (_features.length >= 20) {
+        notice = 'A plan can have up to 20 features';
+      } else {
         _features.add(raw);
+        _featureInputCtrl.clear();
       }
-      _featureInputCtrl.clear();
     });
+    if (notice != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(notice!)));
+    }
   }
 
   void _removeFeature(String f) {
@@ -130,7 +145,9 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
     setState(() => _isSubmitting = true);
     try {
       if (widget.isEdit) {
-        await ref.read(planUpdateControllerProvider.notifier).update(
+        await ref
+            .read(planUpdateControllerProvider.notifier)
+            .update(
               widget.existingPlan!.id,
               PlanUpdateInput(
                 name: name,
@@ -143,11 +160,12 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
             );
         if (!mounted) return;
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Plan updated')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Plan updated')));
       } else {
-        await ref.read(planCreateControllerProvider.notifier).create(
+        await ref
+            .read(planCreateControllerProvider.notifier)
+            .create(
               PlanCreateInput(
                 name: name,
                 description: description.isEmpty ? null : description,
@@ -159,20 +177,17 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
             );
         if (!mounted) return;
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Plan created')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Plan created')));
       }
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save plan: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not save plan: $e')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -181,289 +196,209 @@ class _PlanFormSheetState extends ConsumerState<PlanFormSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Material(
-      color: LatoColors.surfaceDark,
-      child: SafeArea(
-        top: false,
+    return LatoFormSheetScaffold(
+      title: widget.isEdit ? 'Edit Plan' : 'New Plan',
+      footer: LatoPrimaryButton(
+        label: widget.isEdit ? 'SAVE CHANGES' : 'CREATE PLAN',
+        loading: _isSubmitting,
+        onPressed: _isSubmitting ? null : _submit,
+      ),
+      body: Form(
+        key: _formKey,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag handle
-            Padding(
-              padding: const EdgeInsets.only(top: LatoSpacing.md),
-              child: Container(
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: LatoColors.borderDark,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            const _SectionLabel('PLAN DETAILS'),
+            const SizedBox(height: LatoSpacing.md),
+            _RequiredLabel(text: 'Name'),
+            const SizedBox(height: LatoSpacing.sm),
+            TextFormField(
+              controller: _nameCtrl,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                hintText: 'e.g., Monthly, Quarterly',
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Name is required';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: LatoSpacing.lg),
+            _FieldLabel(text: 'Description'),
+            const SizedBox(height: LatoSpacing.sm),
+            TextFormField(
+              controller: _descriptionCtrl,
+              minLines: 2,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText: 'Brief description of the plan',
               ),
             ),
-            // Title row
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                LatoSpacing.xl,
-                LatoSpacing.md,
-                LatoSpacing.xl,
-                LatoSpacing.md,
+            const SizedBox(height: LatoSpacing.lg),
+            _RequiredLabel(text: 'Duration (days)'),
+            const SizedBox(height: LatoSpacing.sm),
+            TextFormField(
+              controller: _durationCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(hintText: '30'),
+              onChanged: _onDurationChanged,
+              validator: (v) {
+                final n = int.tryParse((v ?? '').trim());
+                if (n == null || n <= 0) return 'Enter duration';
+                return null;
+              },
+            ),
+            const SizedBox(height: LatoSpacing.sm),
+            Text('Quick pick', style: theme.textTheme.bodySmall),
+            Wrap(
+              spacing: LatoSpacing.sm,
+              children: [
+                for (final (label, days) in _durationChips)
+                  _DurationChip(
+                    label: label,
+                    selected: _durationDays == days,
+                    onTap: () => _selectDurationChip(days),
+                  ),
+              ],
+            ),
+            const SizedBox(height: LatoSpacing.md),
+            _RequiredLabel(text: 'Price'),
+            const SizedBox(height: LatoSpacing.sm),
+            TextFormField(
+              controller: _priceCtrl,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.isEdit ? 'Edit Plan' : 'New Plan',
-                      style: theme.textTheme.headlineSmall,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              decoration: const InputDecoration(
+                hintText: '0',
+                prefixIcon: Padding(
+                  padding: EdgeInsets.only(left: 16, right: 8),
+                  child: Text(
+                    '₹',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: LatoColors.textSecondaryDark,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    color: LatoColors.textSecondaryDark,
-                    onPressed: () => Navigator.of(context).pop(),
+                ),
+                prefixIconConstraints: BoxConstraints(minWidth: 0),
+              ),
+              validator: (v) {
+                final n = double.tryParse((v ?? '').trim());
+                if (n == null || n <= 0) return 'Enter price';
+                return null;
+              },
+            ),
+            const SizedBox(height: LatoSpacing.lg),
+            // Features
+            _FieldLabel(text: 'Features'),
+            const SizedBox(height: LatoSpacing.sm),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _featureInputCtrl,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _addFeature(),
+                      decoration: const InputDecoration(
+                        hintText: 'e.g., Personal trainer',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: LatoSpacing.sm),
+                  SizedBox(
+                    width: LatoSizes.button,
+                    child: Material(
+                      color: LatoColors.primary,
+                      borderRadius: BorderRadius.circular(LatoRadius.md),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(LatoRadius.md),
+                        onTap: _addFeature,
+                        child: const Tooltip(
+                          message: 'Add feature',
+                          child: Icon(
+                            Icons.add,
+                            color: LatoColors.bgDark,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            // Form
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  LatoSpacing.xl,
-                  0,
-                  LatoSpacing.xl,
-                  LatoSpacing.xxl,
+            const SizedBox(height: LatoSpacing.sm),
+            Text(
+              'Add the benefits members receive with this plan.',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (_features.isNotEmpty) ...[
+              const SizedBox(height: LatoSpacing.md),
+              Wrap(
+                spacing: LatoSpacing.sm,
+                runSpacing: LatoSpacing.sm,
+                children: [
+                  for (final f in _features)
+                    _RemovableChip(label: f, onRemove: () => _removeFeature(f)),
+                ],
+              ),
+            ],
+            const SizedBox(height: LatoSpacing.xxl),
+            // Active toggle card
+            InkWell(
+              onTap: () => setState(() => _isActive = !_isActive),
+              borderRadius: BorderRadius.circular(LatoRadius.md),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: LatoSpacing.md,
+                  vertical: LatoSpacing.sm,
                 ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _SectionLabel('PLAN DETAILS'),
-                      const SizedBox(height: LatoSpacing.md),
-                      _FieldLabel(text: 'Name'),
-                      const SizedBox(height: LatoSpacing.sm),
-                      TextFormField(
-                        controller: _nameCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          hintText: 'e.g., Monthly, Quarterly',
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Name is required';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: LatoSpacing.lg),
-                      _FieldLabel(text: 'Description'),
-                      const SizedBox(height: LatoSpacing.sm),
-                      TextFormField(
-                        controller: _descriptionCtrl,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          hintText: 'Brief description of the plan',
-                        ),
-                      ),
-                      const SizedBox(height: LatoSpacing.lg),
-                      // Duration + Price two-column row
-                      Row(
+                decoration: BoxDecoration(
+                  color: LatoColors.surfaceRaisedDark,
+                  borderRadius: BorderRadius.circular(LatoRadius.md),
+                  border: Border.all(color: LatoColors.borderDark),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _RequiredLabel(text: 'Duration (days)'),
-                                const SizedBox(height: LatoSpacing.sm),
-                                TextFormField(
-                                  controller: _durationCtrl,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                  ],
-                                  decoration: const InputDecoration(
-                                    hintText: '30',
-                                  ),
-                                  onChanged: _onDurationChanged,
-                                  validator: (v) {
-                                    final n = int.tryParse(
-                                        (v ?? '').trim());
-                                    if (n == null || n <= 0) {
-                                      return 'Enter duration';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ],
-                            ),
+                          Text(
+                            'Active plan',
+                            style: theme.textTheme.labelLarge,
                           ),
-                          const SizedBox(width: LatoSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _RequiredLabel(text: 'Price (₹)'),
-                                const SizedBox(height: LatoSpacing.sm),
-                                TextFormField(
-                                  controller: _priceCtrl,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                          decimal: true),
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.allow(
-                                      RegExp(r'[0-9.]'),
-                                    ),
-                                  ],
-                                  decoration: const InputDecoration(
-                                    hintText: '1499',
-                                  ),
-                                  validator: (v) {
-                                    final n =
-                                        double.tryParse((v ?? '').trim());
-                                    if (n == null || n <= 0) {
-                                      return 'Enter price';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ],
-                            ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Available for new purchases and renewals',
+                            style: theme.textTheme.bodySmall,
                           ),
                         ],
                       ),
-                      // Duration quick-pick chips
-                      const SizedBox(height: LatoSpacing.sm),
-                      Wrap(
-                        spacing: LatoSpacing.sm,
-                        runSpacing: LatoSpacing.sm,
-                        children: [
-                          for (final (label, days) in _durationChips)
-                            _DurationChip(
-                              label: label,
-                              selected: _durationDays == days,
-                              onTap: () => _selectDurationChip(days),
-                            ),
-                        ],
+                    ),
+                    const SizedBox(width: LatoSpacing.sm),
+                    Switch.adaptive(
+                      value: _isActive,
+                      onChanged: (v) => setState(() => _isActive = v),
+                      activeThumbColor: LatoColors.primary,
+                      activeTrackColor: LatoColors.primary.withValues(
+                        alpha: 0.35,
                       ),
-                      const SizedBox(height: LatoSpacing.lg),
-                      // Features
-                      _FieldLabel(text: 'Features'),
-                      const SizedBox(height: LatoSpacing.sm),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _featureInputCtrl,
-                              textInputAction: TextInputAction.done,
-                              onSubmitted: (_) => _addFeature(),
-                              decoration: const InputDecoration(
-                                hintText: 'e.g., Personal trainer',
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: LatoSpacing.sm),
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            decoration: BoxDecoration(
-                              color: LatoColors.primary,
-                              borderRadius: BorderRadius.circular(LatoRadius.md),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.add,
-                                color: LatoColors.bgDark,
-                                size: 22,
-                              ),
-                              onPressed: _addFeature,
-                              tooltip: 'Add feature',
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: LatoSpacing.sm),
-                      Text(
-                        'Add the benefits members receive with this plan.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      if (_features.isNotEmpty) ...[
-                        const SizedBox(height: LatoSpacing.md),
-                        Wrap(
-                          spacing: LatoSpacing.sm,
-                          runSpacing: LatoSpacing.sm,
-                          children: [
-                            for (final f in _features)
-                              InputChip(
-                                label: Text(f),
-                                onDeleted: () => _removeFeature(f),
-                                deleteIconColor:
-                                    LatoColors.textSecondaryDark,
-                                backgroundColor: const Color(0x1AFFFFFF),
-                                side: const BorderSide(
-                                    color: LatoColors.borderDark),
-                              ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: LatoSpacing.xxl),
-                      // Active toggle row
-                      InkWell(
-                        onTap: () => setState(() => _isActive = !_isActive),
-                        borderRadius: BorderRadius.circular(LatoRadius.md),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: LatoSpacing.xs,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: Checkbox(
-                                  value: _isActive,
-                                  onChanged: (v) =>
-                                      setState(() => _isActive = v ?? false),
-                                  activeColor: LatoColors.primary,
-                                  checkColor: LatoColors.bgDark,
-                                  side: BorderSide(
-                                    color: _isActive
-                                        ? LatoColors.primary
-                                        : LatoColors.borderDark,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: LatoSpacing.sm),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Active plan',
-                                      style: theme.textTheme.labelLarge,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Available for new purchases and renewals',
-                                      style: theme.textTheme.bodySmall,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: LatoSpacing.huge),
-                      LatoPrimaryButton(
-                        label: widget.isEdit ? 'SAVE CHANGES' : 'CREATE PLAN',
-                        loading: _isSubmitting,
-                        onPressed: _isSubmitting ? null : _submit,
-                      ),
-                      const SizedBox(height: LatoSpacing.lg),
-                    ],
-                  ),
+                      inactiveThumbColor: LatoColors.textSecondaryDark,
+                      inactiveTrackColor: LatoColors.textSecondaryDark
+                          .withValues(alpha: 0.25),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -545,29 +480,85 @@ class _DurationChip extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: LatoSpacing.md,
-            vertical: LatoSpacing.xs,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? LatoColors.primary : const Color(0x1AFFFFFF),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? LatoColors.primary : LatoColors.borderDark,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected
-                  ? LatoColors.bgDark
-                  : theme.colorScheme.onSurfaceVariant,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: LatoSpacing.md,
+                vertical: LatoSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: selected ? LatoColors.primary : const Color(0x1AFFFFFF),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected ? LatoColors.primary : LatoColors.borderDark,
+                ),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: selected
+                      ? LatoColors.bgDark
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Neutral feature chip with a remove control (48dp tap target on the x).
+class _RemovableChip extends StatelessWidget {
+  const _RemovableChip({required this.label, required this.onRemove});
+  final String label;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(left: LatoSpacing.md),
+      decoration: BoxDecoration(
+        color: const Color(0x1AFFFFFF),
+        borderRadius: LatoRadius.chip,
+        border: Border.all(color: LatoColors.borderDark),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: LatoColors.textSecondaryDark,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: onRemove,
+            customBorder: const CircleBorder(),
+            child: Semantics(
+              label: 'Remove $label',
+              child: const SizedBox(
+                width: 36,
+                height: 36,
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: LatoColors.textSecondaryDark,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

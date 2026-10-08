@@ -100,6 +100,16 @@ class Payment {
     }
   }
 
+  /// "Plan purchase" or "Dues payment", from the server-set [kind]; falls back
+  /// to whether a Plan is attached for older records.
+  String get typeLabel {
+    if (kind == 'dues') return 'Dues payment';
+    if (kind == 'plan_purchase' || (planName ?? '').isNotEmpty) {
+      return 'Plan purchase';
+    }
+    return 'Payment';
+  }
+
   factory Payment.fromJson(Map<String, dynamic> json) {
     return Payment(
       id: (json['_id'] ?? json['id']) as String,

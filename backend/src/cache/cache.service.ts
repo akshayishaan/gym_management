@@ -10,6 +10,7 @@ import { MongoConfigService } from "../config";
  * single `SCAN`/`MATCH` pass can clear every entry belonging to one gym:
  *
  *   cache:dashboard:{gymId}         → dashboard summary
+ *   cache:dashboard-previous:{gymId}:{date} → last-month comparison figures
  *   cache:plans:{gymId}             → plan portfolio insights (gym-scoped)
  *   cache:reports:{gymId}:{year}    → annual report
  *
@@ -24,6 +25,7 @@ import { MongoConfigService } from "../config";
  */
 export const CACHE_TTL_SECONDS = {
   dashboard: 30,
+  dashboardPrevious: 3600,
   plans: 30,
   reports: 60,
 } as const;

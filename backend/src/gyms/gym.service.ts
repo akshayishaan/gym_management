@@ -9,13 +9,15 @@ import {
   Plan,
   Staff,
 } from "../schemas";
-import { DomainError, ForbiddenError } from "../common";
+import { DomainError, ForbiddenError, withMongoTransaction } from "../common";
 import { MongoConnectionService } from "../database";
 import type { AuthenticatedUser } from "../auth";
 import {
   gymCreateSchema,
+  gymDeleteSchema,
   gymUpdateSchema,
   type GymCreateInput,
+  type GymDeleteInput,
   type GymUpdateInput,
 } from "./gym.schemas";
 
@@ -97,25 +99,88 @@ export class GymsService {
     return gym;
   }
 
-  async remove(id: string, gymIds: string[]): Promise<{ success: boolean }> {
+  /** What deleting the Gym would erase, for the confirmation screen. */
+  async deletionSummary(id: string, user: AuthenticatedUser) {
     await this.connection.getConnection();
+    this.assertCanDelete(id, user);
 
-    if (!gymIds.includes(id)) {
-      throw new ForbiddenError("You can only delete your own gyms");
-    }
+    const gym = await Gym.findById(id).lean();
+    if (!gym) throw new DomainError("Not found", 404);
+
+    const [members, payments, plans, memberships, activity, staff] =
+      await Promise.all([
+        Member.countDocuments({ gymId: id }),
+        Payment.countDocuments({ gymId: id }),
+        Plan.countDocuments({ gymId: id }),
+        Membership.countDocuments({ gymId: id }),
+        ActivityLog.countDocuments({ gymId: id }),
+        Staff.countDocuments({ gymIds: id }),
+      ]);
+
+    return {
+      name: gym.name,
+      members,
+      payments,
+      plans,
+      memberships,
+      activity,
+      // Staff with access to this Gym, including the caller.
+      staff,
+    };
+  }
+
+  /**
+   * Hard-deletes the Gym and everything scoped to it. Requires the Gym's
+   * exact name and the caller's password, and runs as one transaction so the
+   * cascade is all-or-nothing.
+   */
+  async remove(
+    id: string,
+    input: GymDeleteInput,
+    user: AuthenticatedUser,
+  ): Promise<{ success: boolean }> {
+    await this.connection.getConnection();
+    this.assertCanDelete(id, user);
+    const { confirmName, password } = gymDeleteSchema.parse(input);
 
     const gym = await Gym.findById(id);
     if (!gym) throw new DomainError("Not found", 404);
 
-    await Staff.updateMany({ gymIds: id }, { $pull: { gymIds: id } });
-    await Member.deleteMany({ gymId: id });
-    await Payment.deleteMany({ gymId: id });
-    await Plan.deleteMany({ gymId: id });
-    await Membership.deleteMany({ gymId: id });
-    await LifecycleMutation.deleteMany({ gymId: id });
-    await ActivityLog.deleteMany({ gymId: id });
-    await Gym.findByIdAndDelete(id);
+    if (confirmName.trim() !== gym.name) {
+      throw new DomainError("The name you typed does not match this gym");
+    }
+
+    const staff = await Staff.findById(user.id);
+    if (!staff || !(await staff.comparePassword(password))) {
+      // 400, not 401/403: the client treats those as an expired session.
+      throw new DomainError("Incorrect password");
+    }
+
+    await withMongoTransaction(async (session) => {
+      await Staff.updateMany(
+        { gymIds: id },
+        { $pull: { gymIds: id } },
+        { session },
+      );
+      await Member.deleteMany({ gymId: id }, { session });
+      await Payment.deleteMany({ gymId: id }, { session });
+      await Plan.deleteMany({ gymId: id }, { session });
+      await Membership.deleteMany({ gymId: id }, { session });
+      await LifecycleMutation.deleteMany({ gymId: id }, { session });
+      await ActivityLog.deleteMany({ gymId: id }, { session });
+      await Gym.findByIdAndDelete(id, { session });
+      return true;
+    });
 
     return { success: true };
+  }
+
+  private assertCanDelete(id: string, user: AuthenticatedUser) {
+    if (!user.gymIds.includes(id)) {
+      throw new ForbiddenError("You can only delete your own gyms");
+    }
+    if (user.role !== "admin") {
+      throw new ForbiddenError("Only admins can delete a gym");
+    }
   }
 }

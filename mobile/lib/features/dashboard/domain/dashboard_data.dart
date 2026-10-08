@@ -9,8 +9,7 @@ class DashboardData {
     required this.monthRevenue,
     required this.recentPayments,
     required this.expiringList,
-    this.monthRevenueDeltaPct,
-    this.isRevenueDeltaSynthetic = false,
+    this.previous,
   });
 
   /// Total members with `isActive != false` (legacy docs count too).
@@ -35,17 +34,22 @@ class DashboardData {
   /// nearest expiry. Each entry carries the days-until-expiry.
   final List<ExpiringMember> expiringList;
 
-  /// Month-over-month revenue delta as a percentage (e.g. `12.4` means
-  /// +12.4% vs the previous month). The backend doesn't ship this value
-  /// yet, so the repository derives a stable synthetic value from the
-  /// current month's revenue and marks it with [isRevenueDeltaSynthetic]
-  /// so the UI can flag it as "Demo data".
-  final double? monthRevenueDeltaPct;
+  /// The same three figures as they stood at this point last month, for a
+  /// like-for-like change (see `DashboardService` in the backend). Null when
+  /// the server did not send them.
+  final DashboardPrevious? previous;
 
-  /// True when [monthRevenueDeltaPct] was synthesized client-side rather
-  /// than returned by the backend. The UI should render the chip at a
-  /// reduced opacity with a "Demo data" tooltip in that case.
-  final bool isRevenueDeltaSynthetic;
+  Comparison? get totalMembersComparison => previous == null
+      ? null
+      : Comparison(current: totalMembers, previous: previous!.totalMembers);
+
+  Comparison? get activeMembersComparison => previous == null
+      ? null
+      : Comparison(current: activeMembers, previous: previous!.activeMembers);
+
+  Comparison? get monthRevenueComparison => previous == null
+      ? null
+      : Comparison(current: monthRevenue, previous: previous!.monthRevenue);
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
@@ -62,12 +66,45 @@ class DashboardData {
           .whereType<Map<String, dynamic>>()
           .map(ExpiringMember.fromJson)
           .toList(),
-      monthRevenueDeltaPct:
-          (json['monthRevenueDeltaPct'] as num?)?.toDouble(),
-      isRevenueDeltaSynthetic:
-          json['isRevenueDeltaSynthetic'] as bool? ?? false,
+      previous: json['previous'] is Map<String, dynamic>
+          ? DashboardPrevious.fromJson(json['previous'] as Map<String, dynamic>)
+          : null,
     );
   }
+}
+
+/// Last month's figures at the same point in the month.
+class DashboardPrevious {
+  const DashboardPrevious({
+    required this.totalMembers,
+    required this.activeMembers,
+    required this.monthRevenue,
+  });
+
+  final int totalMembers;
+  final int activeMembers;
+  final double monthRevenue;
+
+  factory DashboardPrevious.fromJson(Map<String, dynamic> json) {
+    return DashboardPrevious(
+      totalMembers: (json['totalMembers'] as num?)?.toInt() ?? 0,
+      activeMembers: (json['activeMembers'] as num?)?.toInt() ?? 0,
+      monthRevenue: (json['monthRevenue'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+/// A figure against its value last month.
+class Comparison {
+  const Comparison({required this.current, required this.previous});
+
+  final num current;
+  final num previous;
+
+  num get change => current - previous;
+
+  /// Percentage change, or null when last month was zero (no base to divide).
+  double? get percent => previous == 0 ? null : change / previous * 100;
 }
 
 class RecentPayment {
@@ -93,8 +130,8 @@ class RecentPayment {
       memberName: json['memberName'] as String? ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       method: json['method'] as String? ?? 'other',
-      paidAt: DateTime.tryParse(json['paidAt'] as String? ?? '') ??
-          DateTime.now(),
+      paidAt:
+          DateTime.tryParse(json['paidAt'] as String? ?? '') ?? DateTime.now(),
       kind: json['kind'] as String?,
     );
   }
@@ -113,9 +150,11 @@ class ExpiringMember {
   final String id;
   final String name;
   final String? phone;
+
   /// YYYY-MM-DD string per the gym's authoritative timezone.
   final String membershipExpiry;
   final String? planName;
+
   /// Computed server-side; negative if already expired.
   final int daysUntilExpiry;
 

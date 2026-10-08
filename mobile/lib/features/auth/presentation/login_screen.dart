@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../design/components/lato_card.dart';
+import '../../../design/spacing.dart';
 import '../application/auth_controller.dart';
 
 /// Figma "02 login" — email + password sign-in form.
@@ -34,21 +35,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onSubmit() async {
-if (_submitting) return;
+    if (_submitting) return;
     final form = _formKey.currentState;
-if (form == null || !form.validate()) {
-return;
+    if (form == null || !form.validate()) {
+      return;
     }
-setState(() {
+    setState(() {
       _submitting = true;
       _formError = null;
     });
 
     try {
-      await ref.read(authControllerProvider.notifier).signIn(
-            email: _emailCtrl.text.trim(),
-            password: _passwordCtrl.text,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .signIn(email: _emailCtrl.text.trim(), password: _passwordCtrl.text);
       // Router redirect handles navigation on success.
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -67,15 +67,18 @@ setState(() {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/splash'),
-        ),
+        // The welcome/splash screens are not somewhere to return to.
+        automaticallyImplyLeading: false,
         title: const Text('Login'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          padding: const EdgeInsets.fromLTRB(
+            LatoSpacing.xl,
+            LatoSpacing.sm,
+            LatoSpacing.xl,
+            LatoSpacing.xxl,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -87,19 +90,17 @@ setState(() {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: LatoSpacing.xxl),
 
                 // Email
                 Text('Email', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
+                const SizedBox(height: LatoSpacing.sm),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    hintText: 'you@studio.com',
-                  ),
+                  decoration: const InputDecoration(hintText: 'you@studio.com'),
                   validator: (v) {
                     final value = v?.trim() ?? '';
                     if (value.isEmpty) return 'Email is required';
@@ -107,27 +108,26 @@ setState(() {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: LatoSpacing.xl),
 
                 // Password
                 Text('Enter Password', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
+                const SizedBox(height: LatoSpacing.sm),
                 TextFormField(
                   controller: _passwordCtrl,
                   obscureText: _obscurePassword,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _onSubmit(),
                   decoration: InputDecoration(
-                    hintText: '••••••••',
+                    hintText: 'Your password',
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
                       ),
-                      onPressed: () => setState(
-                        () => _obscurePassword = !_obscurePassword,
-                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (v) {
@@ -142,7 +142,8 @@ setState(() {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            'Password reset link will be sent if your email is on file.',
+                            "Password reset isn't available yet. "
+                            'Contact your gym admin.',
                           ),
                         ),
                       );
@@ -152,7 +153,7 @@ setState(() {
                 ),
 
                 if (_formError != null) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: LatoSpacing.xs),
                   Text(
                     _formError!,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -161,13 +162,13 @@ setState(() {
                   ),
                 ],
 
-                const SizedBox(height: 24),
+                const SizedBox(height: LatoSpacing.xxl),
                 LatoPrimaryButton(
                   label: 'Login',
                   loading: _submitting,
                   onPressed: _submitting ? null : _onSubmit,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: LatoSpacing.lg),
 
                 Center(
                   child: Wrap(

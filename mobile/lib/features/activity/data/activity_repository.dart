@@ -14,12 +14,10 @@ class ActivityRepository {
   ActivityRepository(this._dio);
   final Dio _dio;
 
-  /// GET /activity?page=&limit=
+  /// GET /activity?page=&limit=&range=&from=&to=&actions=
   ///
-  /// The backend ignores any `action` query param and always returns the
-  /// full page sorted by `createdAt: -1`. Filtering by action is done
-  /// client-side in the UI so the chip cluster can toggle without a
-  /// round-trip.
+  /// Date range and action filters are applied by the server in the Gym's
+  /// timezone; `total` is the count for the same filter.
   Future<ActivityLogPage> getLogs(ActivityLogQuery query) async {
     try {
       final res = await _dio.get<Map<String, dynamic>>(
@@ -27,6 +25,11 @@ class ActivityRepository {
         queryParameters: {
           'page': query.page,
           'limit': query.limit,
+          if (query.range != null) 'range': query.range,
+          if (query.from != null) 'from': query.from,
+          if (query.to != null) 'to': query.to,
+          if (query.actions != null && query.actions!.isNotEmpty)
+            'actions': (query.actions!.toList()..sort()).join(','),
         },
       );
       if (res.statusCode == 200 && res.data != null) {
@@ -40,6 +43,7 @@ class ActivityRepository {
           total: (data['total'] as num?)?.toInt() ?? list.length,
           page: (data['page'] as num?)?.toInt() ?? query.page,
           limit: (data['limit'] as num?)?.toInt() ?? query.limit,
+          today: data['today'] as String?,
         );
       }
       throw toApiException(_badResponse(res));
@@ -63,10 +67,8 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
 
 /// Paginated activity log for the active gym. Re-runs when the active
 /// gym changes so switching tenants refreshes the audit feed.
-final activityLogProvider =
-    FutureProvider.autoDispose.family<ActivityLogPage, ActivityLogQuery>(
-  (ref, query) {
-    ref.watch(activeGymProvider);
-    return ref.watch(activityRepositoryProvider).getLogs(query);
-  },
-);
+final activityLogProvider = FutureProvider.autoDispose
+    .family<ActivityLogPage, ActivityLogQuery>((ref, query) {
+      ref.watch(activeGymProvider);
+      return ref.watch(activityRepositoryProvider).getLogs(query);
+    });

@@ -1,0 +1,88 @@
+# =============================================================================
+# Gym Management — HYBRID DEVELOPMENT stack (dev-only, NOT for production)
+#
+# This compose file runs ONLY the infrastructure (MongoDB + Redis) in Docker.
+# The NestJS backend runs NATIVELY on the host for fast hot reload — on macOS,
+# Docker bind-mounts are slow, so `npm run start:dev` (nest --watch) is far
+# snappier than rebuilding a container on every change.
+#
+# Usage:
+#   Terminal 1: docker compose -f docker-compose.dev.yml up -d
+#   Terminal 2: cd backend && npm run start:dev
+#
+# KEY DIFFERENCE FROM PROD (docker-compose.yml):
+#   Mongo and Redis expose their host ports (27017 / 6379) so the NATIVE app
+#   can reach them over localhost. In prod they stay internal to the compose
+#   network. This is the ONLY reason these ports are published here.
+#
+# ISOLATION FROM PROD:
+#   - `name: gym-backend-dev` gives this a separate compose project, so its
+#     containers/network never collide with the prod project.
+#   - Distinct volume names (`mongo-dev-data`, `redis-dev-data`) keep dev data
+#     fully isolated from prod data.
+#
+# REPLICA SET NOTE:
+#   The replica-set member host is pinned to `localhost` (not `mongo`) so the
+#   native app's `mongodb://localhost:27017/...?replicaSet=rs0` connection
+#   string resolves correctly during replica-set discovery. If we used
+#   `mongo`, the driver would try to reach hostname `mongo` from the host and
+#   fail. Transactions (ADR-0001) require this replica set.
+# =============================================================================
+
+name: gym-backend-dev
+
+services:
+  # ---------------------------------------------------------------------------
+  # MongoDB — single-node replica set (transactions require a replica set).
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    # The init script wraps mongod: it starts mongod, runs rs.initiate()
+    # idempotently, waits for PRIMARY, then keeps mongod in the foreground.
+    entrypoint: ["/bin/bash", "/docker-entrypoint-initdb.d/mongo-init.sh"]
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    environment:
+      # Optional auth. If set, the backend MONGODB_URI must embed matching
+      # credentials. Leave unset for a trust-the-network dev setup.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-}
+      REPL_SET_NAME: rs0
+      # `localhost` (not `mongo`) so the native app can reach the replica-set
+      # member during discovery — see the note at the top of this file.
+      MONGO_HOST_NAME: localhost
+      MONGO_PORT: "27017"
+    ports:
+      # Exposed to the host so the NATIVE NestJS app can connect.
+      - "27017:27017"
+    volumes:
+      - mongo-dev-data:/data/db
+      - ./docker/mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Redis — read cache + BullMQ invalidation queue (optional but included).
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      # Exposed to the host so the NATIVE NestJS app can connect.
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  mongo-dev-data:
+  redis-dev-data:

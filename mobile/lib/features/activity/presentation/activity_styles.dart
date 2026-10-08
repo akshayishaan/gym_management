@@ -2,30 +2,25 @@ import 'package:flutter/material.dart';
 
 import '../../../design/colors.dart';
 
-/// Activity-log-specific colors and text styles. The brand-wide tokens
-/// live in `design/colors.dart`; the values here are sampled from the
-/// Figma `activity_log.png` design and don't need to be shared.
+/// Activity-log text styles and the few surface aliases the timeline uses.
+/// Every colour comes from the app palette in `design/colors.dart`.
 class Alog {
   Alog._();
 
   // Surfaces
-  static const Color rail = Color(0xFF31353C);
-  static const Color railBg = Color(0xFF1c2026);
-  static const Color railTrackBg = Color(0xFF0a0e14);
-  static const Color railHeaderBg = Color(0xF810141A);
-  static const Color railHeaderBorder = Color(0x66262a31);
-  static const Color pillBg = Color(0xFF262a31);
-  static const Color pillBorder = Color(0xFF31353c);
-  static const Color cardBorder = Color(0xFF262a31);
-  static const Color footerBg = Color(0xFF1c2026);
-  static const Color allChipBg = Color(0xFFC3F400);
-  static const Color allChipFg = Color(0xFF0a0e14);
-  static const Color avatarBorder = Color(0xFF31353c);
-  static const Color avatarBg = Color(0xFF262a31);
-  static const Color pastDot = Color(0xFF8E9379);
-  static const Color sage = Color(0xFFc4c9ac);
-  static const Color titleFg = Color(0xFFdfe2eb);
-  static const Color titleBg = Color(0xFFD5D9E2);
+  static const Color rail = LatoColors.borderStrongDark;
+  static const Color railBg = LatoColors.bgDark;
+  static const Color railHeaderBg = LatoColors.bgDark;
+  static const Color railHeaderBorder = LatoColors.borderDark;
+  static const Color pillBg = LatoColors.surfaceRaisedDark;
+  static const Color pillBorder = LatoColors.borderDark;
+  static const Color cardBorder = LatoColors.borderDark;
+  static const Color footerBg = LatoColors.surfaceRaisedDark;
+  static const Color avatarBorder = LatoColors.borderDark;
+  static const Color avatarBg = LatoColors.surfaceRaisedDark;
+  static const Color pastDot = LatoColors.textTertiaryDark;
+  static const Color sage = LatoColors.textSecondaryDark;
+  static const Color titleFg = LatoColors.textPrimaryDark;
 
   // Reusable text styles for the timeline / chips
   static const TextStyle eyebrow = TextStyle(

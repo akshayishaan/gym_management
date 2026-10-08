@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../../design/colors.dart';
 
 /// A RepiX ActivityLog as returned by `GET /activity`. The backend's
 /// `activity-log.schema.ts` is the source of truth; this model mirrors it
@@ -21,6 +24,8 @@ class ActivityLog {
     this.entityId,
     this.details,
     this.createdAt,
+    this.day,
+    this.time,
   });
 
   /// Mongoose `_id` mapped to `id` on the wire.
@@ -37,7 +42,12 @@ class ActivityLog {
   final String? details;
   final DateTime? createdAt;
 
-  /// Uppercase label for the chip cluster (matches Figma).
+  /// Gym-local calendar date (`YYYY-MM-DD`) and time (`HH:mm`) of the event,
+  /// computed by the server in the Gym's timezone.
+  final String? day;
+  final String? time;
+
+  /// Uppercase label for the chip cluster.
   String get label {
     switch (action) {
       case ActionType.created:
@@ -57,64 +67,73 @@ class ActivityLog {
     }
   }
 
-  /// Chip palette for the action. Colors match the Figma design — the
-  /// alpha-aware `0xAARRGGBB` form lets the chip blend with its surface.
-  ({Color bg, Color fg, Color border}) get colors {
+  /// Plain-words headline: "Member created", "Plan updated", "Payment
+  /// voided".
+  String get title {
+    final subject = entity.isEmpty
+        ? 'Record'
+        : entity[0].toUpperCase() + entity.substring(1);
+    return '$subject ${action.isEmpty ? 'changed' : action}';
+  }
+
+  /// Last six characters of the record id, enough to tell records apart
+  /// without printing the whole 24-character database id.
+  String get shortId {
+    final full = (entityId != null && entityId!.isNotEmpty) ? entityId! : id;
+    return full.length <= 6 ? full : full.substring(full.length - 6);
+  }
+
+  /// Accent for the action. Uses the app palette: lime for created, blue
+  /// (info) for updated, orange for voided/refunded, red for deleted, grey
+  /// for reversed and anything unknown.
+  Color get accent {
     switch (action) {
       case ActionType.created:
-        return (
-          bg: const Color(0xFF2A2A0F),
-          fg: const Color(0xFFC5F23F),
-          border: const Color(0xFF3D4A0A),
-        );
+        return LatoColors.primary;
       case ActionType.updated:
-        return (
-          bg: const Color(0xFF00262B),
-          fg: const Color(0xFF00DBE9),
-          border: const Color(0xFF005C66),
-        );
+        return LatoColors.info;
       case ActionType.voided:
-        return (
-          bg: const Color(0xFF2A1100),
-          fg: const Color(0xFFFF5708),
-          border: const Color(0xFF66310A),
-        );
       case ActionType.refunded:
-        return (
-          bg: const Color(0xFF2A1810),
-          fg: const Color(0xFFFFB59C),
-          border: const Color(0xFF663D33),
-        );
-      case ActionType.reversed:
-        return (
-          bg: const Color(0xFF2A1F18),
-          fg: const Color(0xFFFFDBCF),
-          border: const Color(0xFF66483D),
-        );
+        return LatoColors.warning;
       case ActionType.deleted:
-        return (
-          bg: const Color(0xFF2A0F0F),
-          fg: const Color(0xFFFFB4AB),
-          border: const Color(0xFF662222),
-        );
+        return LatoColors.error;
       default:
-        return (
-          bg: const Color(0xFF1F1F1F),
-          fg: const Color(0xFFA3A3A3),
-          border: const Color(0xFF404040),
-        );
+        return LatoColors.textSecondaryDark;
     }
   }
 
-  /// `YYYY-MM-DD` day bucket derived from [createdAt]. Used by Track B's
-  /// grouping header. Returns an empty string if [createdAt] is null.
-  String get dayKey {
+  /// Chip palette for the action, derived from [accent].
+  ({Color bg, Color fg, Color border}) get colors {
+    final c = accent;
+    return (bg: LatoColors.tint(c), fg: c, border: c.withValues(alpha: 0.4));
+  }
+
+  /// Time of day, in the Gym's timezone when the server sent it (`time`,
+  /// `HH:mm`), otherwise the device's local time.
+  String get timeLabel {
+    final t = time;
+    if (t != null && RegExp(r'^\d{2}:\d{2}$').hasMatch(t)) {
+      final parts = t.split(':');
+      return DateFormat('h:mm a').format(
+        DateTime(2000, 1, 1, int.parse(parts[0]), int.parse(parts[1])),
+      );
+    }
     final ts = createdAt;
+    return ts == null ? '\u2014' : DateFormat('h:mm a').format(ts.toLocal());
+  }
+
+  /// `YYYY-MM-DD` day bucket. Prefers the Gym-local [day] sent by the
+  /// server so grouping does not depend on the device timezone; falls back
+  /// to the device-local date of [createdAt]. Empty when neither exists.
+  String get dayKey {
+    final d = day;
+    if (d != null && d.isNotEmpty) return d;
+    final ts = createdAt?.toLocal();
     if (ts == null) return '';
     final y = ts.year.toString().padLeft(4, '0');
     final m = ts.month.toString().padLeft(2, '0');
-    final d = ts.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
+    final dd = ts.day.toString().padLeft(2, '0');
+    return '$y-$m-$dd';
   }
 
   factory ActivityLog.fromJson(Map<String, dynamic> json) {
@@ -128,6 +147,8 @@ class ActivityLog {
       entityId: json['entityId']?.toString(),
       details: json['details'] as String?,
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      day: json['day'] as String?,
+      time: json['time'] as String?,
     );
   }
 }

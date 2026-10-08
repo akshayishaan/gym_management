@@ -48,6 +48,7 @@ interface OnboardMemberInput extends MutationContext {
   membershipStart?: string;
   amountPaid?: number;
   paymentMethod?: PaymentMethod;
+  reference?: string;
 }
 
 interface RecordPaymentInput extends MutationContext {
@@ -274,6 +275,7 @@ export async function onboardMember(input: OnboardMemberInput): Promise<Lifecycl
           planId: input.planId,
           amount: input.amountPaid ?? 0,
           method: input.paymentMethod ?? "cash",
+          reference: input.reference,
           membershipStart: input.membershipStart,
           actor: input.actor,
           now: input.now,

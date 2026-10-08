@@ -1,78 +1,67 @@
 import 'activity_log.dart';
 
 /// Immutable filter/pagination shape used as the family argument for
-/// `activityLogProvider`. The list screen passes a copy whenever the
-/// user toggles a chip or scrolls a page.
+/// `activityLogProvider`.
 ///
-/// The backend's `ActivityService.list` only accepts `page` and `limit`
-/// (no `action` query param). Filtering by action is therefore done
-/// client-side after fetch in Track B's UI.
+/// All filtering happens on the server, in the Gym's own calendar:
+///  * [range] is `today`, `week` or null (no date filter);
+///  * [from]/[to] are inclusive `YYYY-MM-DD` dates for a custom range;
+///  * [actions] limits results to those action names.
 class ActivityLogQuery {
   const ActivityLogQuery({
     this.actions,
+    this.range,
+    this.from,
+    this.to,
     this.page = 1,
     this.limit = 50,
   });
 
-  /// Selected action chips (e.g. `{created, voided}`). Null/empty means
-  /// "all actions".
   final Set<String>? actions;
-
+  final String? range;
+  final String? from;
+  final String? to;
   final int page;
   final int limit;
 
-  ActivityLogQuery copyWith({
-    Set<String>? actions,
-    int? page,
-    int? limit,
-  }) {
-    return ActivityLogQuery(
-      actions: actions ?? this.actions,
-      page: page ?? this.page,
-      limit: limit ?? this.limit,
-    );
+  /// Identifies the filter without the page size, so the screen can tell
+  /// "same filter, more rows" (Load More) from "different filter".
+  String get filterKey {
+    final sorted = (actions ?? const <String>{}).toList()..sort();
+    return '${range ?? ''}|${from ?? ''}|${to ?? ''}|${sorted.join(',')}';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    if (other is! ActivityLogQuery) return false;
-    if (other.page != page) return false;
-    if (other.limit != limit) return false;
-    if (_setEquals(other.actions, actions)) return true;
-    return false;
+    return other is ActivityLogQuery &&
+        other.page == page &&
+        other.limit == limit &&
+        other.filterKey == filterKey;
   }
 
   @override
-  int get hashCode {
-    final sorted = actions?.toList() ?? <String>[];
-    sorted.sort();
-    return Object.hash(Object.hashAll(sorted), page, limit);
-  }
-
-  static bool _setEquals(Set<String>? a, Set<String>? b) {
-    if (identical(a, b)) return true;
-    if (a == null || b == null) return false;
-    if (a.length != b.length) return false;
-    return a.containsAll(b);
-  }
+  int get hashCode => Object.hash(filterKey, page, limit);
 }
 
-/// Result envelope for `GET /activity`. The backend returns
-/// `{ logs, total, page, limit }` — kept in 1:1 shape here so Track B's
-/// list view can read both the page and the cumulative total.
+/// Result envelope for `GET /activity`: the page of logs, the server's
+/// total for the same filter, and the Gym's current calendar date.
 class ActivityLogPage {
   const ActivityLogPage({
     required this.logs,
     required this.total,
     required this.page,
     required this.limit,
+    this.today,
   });
 
   final List<ActivityLog> logs;
   final int total;
   final int page;
   final int limit;
+
+  /// The Gym's current date (`YYYY-MM-DD`), from the server.
+  final String? today;
 
   bool get hasMore => page * limit < total;
 }

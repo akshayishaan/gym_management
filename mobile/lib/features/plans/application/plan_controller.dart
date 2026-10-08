@@ -19,8 +19,7 @@ class PlanMutationState {
 
 /// `POST /plans`. On success, invalidates the paginated list so the
 /// new row appears immediately.
-class PlanCreateController
-    extends AutoDisposeNotifier<PlanMutationState> {
+class PlanCreateController extends AutoDisposeNotifier<PlanMutationState> {
   @override
   PlanMutationState build() => const PlanMutationState();
 
@@ -40,23 +39,23 @@ class PlanCreateController
 
 final planCreateControllerProvider =
     AutoDisposeNotifierProvider<PlanCreateController, PlanMutationState>(
-  PlanCreateController.new,
-);
+      PlanCreateController.new,
+    );
 
 /// `PUT /plans/:id`. On success, invalidates the list so the edited row
 /// reflects the new values. There is no per-id detail provider — the
 /// edit sheet is populated from the list cache, not from a separate
 /// fetch.
-class PlanUpdateController
-    extends AutoDisposeNotifier<PlanMutationState> {
+class PlanUpdateController extends AutoDisposeNotifier<PlanMutationState> {
   @override
   PlanMutationState build() => const PlanMutationState();
 
   Future<Plan> update(String id, PlanUpdateInput input) async {
     state = const PlanMutationState(loading: true);
     try {
-      final updated =
-          await ref.read(planRepositoryProvider).updatePlan(id, input);
+      final updated = await ref
+          .read(planRepositoryProvider)
+          .updatePlan(id, input);
       ref.invalidate(planListProvider);
       state = const PlanMutationState();
       return updated;
@@ -69,25 +68,23 @@ class PlanUpdateController
 
 final planUpdateControllerProvider =
     AutoDisposeNotifierProvider<PlanUpdateController, PlanMutationState>(
-  PlanUpdateController.new,
-);
+      PlanUpdateController.new,
+    );
 
 /// Active-state toggle. The backend has no DELETE on plans, so
 /// deactivation is a `PUT /plans/:id` with `{isActive: bool}`. On
 /// success, invalidates the list so the row's card chip + stat
 /// columns refresh.
-class PlanDeactivateController
-    extends AutoDisposeNotifier<PlanMutationState> {
+class PlanDeactivateController extends AutoDisposeNotifier<PlanMutationState> {
   @override
   PlanMutationState build() => const PlanMutationState();
 
   Future<void> setActive(String id, bool isActive) async {
     state = const PlanMutationState(loading: true);
     try {
-      await ref.read(planRepositoryProvider).updatePlan(
-            id,
-            PlanUpdateInput(isActive: isActive),
-          );
+      await ref
+          .read(planRepositoryProvider)
+          .updatePlan(id, PlanUpdateInput(isActive: isActive));
       ref.invalidate(planListProvider);
       state = const PlanMutationState();
     } catch (e) {
@@ -99,5 +96,5 @@ class PlanDeactivateController
 
 final planDeactivateControllerProvider =
     AutoDisposeNotifierProvider<PlanDeactivateController, PlanMutationState>(
-  PlanDeactivateController.new,
-);
+      PlanDeactivateController.new,
+    );

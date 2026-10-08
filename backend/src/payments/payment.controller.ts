@@ -28,7 +28,7 @@ export class PaymentsController {
   @Get()
   list(
     @Req() req: AuthenticatedRequest,
-    @Query() query: { memberId?: string; month?: string; page?: string; limit?: string },
+    @Query() query: { memberId?: string; month?: string; status?: string; page?: string; limit?: string },
   ): Promise<Record<string, unknown>> {
     return this.paymentsService.list(req.gymId!, query);
   }

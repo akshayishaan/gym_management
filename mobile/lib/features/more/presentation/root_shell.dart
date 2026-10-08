@@ -34,7 +34,20 @@ class RootShell extends StatelessWidget {
     ),
   ];
 
+  /// Screens opened from the Operations menu keep that tab highlighted.
+  static const _operationsRoutes = [
+    '/operations',
+    '/plans',
+    '/reports',
+    '/activity',
+    '/gyms',
+    '/gym',
+  ];
+
   int _indexFor(String location) {
+    if (_operationsRoutes.any(location.startsWith)) {
+      return _tabs.indexWhere((t) => t.route == '/operations');
+    }
     final i = _tabs.indexWhere((t) => location.startsWith(t.route));
     return i < 0 ? 0 : i;
   }

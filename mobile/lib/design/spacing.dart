@@ -15,6 +15,9 @@ class LatoSpacing {
   static const double xxxl = 32;
   static const double huge = 48;
 
+  /// Bottom padding for a list under a FAB: 56 button + 16 margin + 16 air.
+  static const double fabClearance = 88;
+
   /// Standard page padding (Figma canvas left/right = 20).
   static const EdgeInsets pageH = EdgeInsets.symmetric(horizontal: xl);
 
@@ -36,10 +39,19 @@ class LatoRadius {
   static const double pill = 999;
 
   static const BorderRadius card = BorderRadius.all(Radius.circular(lg));
-  static const BorderRadius sheet =
-      BorderRadius.vertical(top: Radius.circular(xl));
-  static const BorderRadius chip =
-      BorderRadius.all(Radius.circular(pill));
-  static const BorderRadius button =
-      BorderRadius.all(Radius.circular(md));
+  static const BorderRadius sheet = BorderRadius.vertical(
+    top: Radius.circular(xl),
+  );
+  static const BorderRadius chip = BorderRadius.all(Radius.circular(pill));
+  static const BorderRadius button = BorderRadius.all(Radius.circular(md));
+}
+
+/// Component sizes shared across the app.
+class LatoSizes {
+  LatoSizes._();
+
+  /// Height of every full-width action button, primary and secondary alike:
+  /// 48dp, the platform minimum touch target (Material 48dp, iOS 44pt).
+  /// Emphasis comes from fill (primary) versus outline (secondary), not size.
+  static const double button = 48;
 }

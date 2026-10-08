@@ -1,20 +1,24 @@
-// Phase 7 — Receipt / invoice detail. Mirrors the Figma `invoice_receipt.png`:
-// back arrow + "Receipt #INV-XXXX", status pill row (PAID + SETTLED + segmented
-// Paid/Void/Refund), member + invoice side-by-side cards, itemized charges
-// card with breakdown, and Download PDF / Print Receipt actions.
+// Receipt / invoice detail: status chip with Void / Refund actions, amount
+// card, member + invoice cards, charges card, and Share / Print actions.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
 import '../../../design/components/lato_card.dart';
+import '../../../design/components/lato_compact_action_button.dart';
 import '../../../design/components/lato_error_state.dart';
-import '../../../design/components/lato_loading.dart';
+import '../../../design/components/lato_skeleton.dart';
 import '../../../design/components/lato_status_chip.dart';
 import '../../../design/spacing.dart';
+import '../../gym/application/active_gym_controller.dart';
 import '../application/payment_controller.dart';
+import '../application/receipt_pdf.dart';
 import '../data/payment_repository.dart';
 import '../domain/payment.dart';
 
@@ -29,16 +33,36 @@ class PaymentInvoiceScreen extends ConsumerStatefulWidget {
 }
 
 class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
-  /// Bound to the segmented control in the status header card. Kept
-  /// local because the screen is read-only — there's no need to push it
-  /// into a provider.
-  _Action _selectedAction = _Action.paid;
+  bool _busy = false;
+
+  /// Builds the receipt PDF and hands it to [action] (share sheet or print).
+  Future<void> _withPdf(
+    Payment payment,
+    Future<void> Function(Uint8List bytes, String filename) action,
+  ) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      String? gymName;
+      try {
+        gymName = (await ref.read(activeGymProvider.future))?.name;
+      } catch (_) {}
+      final bytes = await buildReceiptPdf(payment: payment, gymName: gymName);
+      await action(bytes, 'Receipt-${payment.invoiceNumber}.pdf');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not create the receipt PDF')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _confirmAndVoid(Payment payment) async {
     final confirmed = await _confirmAction(
       title: 'Void payment #${payment.invoiceNumber}?',
-      body:
-          'This cancels the payment and removes its accounting effect. The audit record is preserved.',
+      body: 'This cancels the payment and removes its accounting effect. The audit record is preserved.',
       confirmLabel: 'Void',
       destructive: true,
     );
@@ -48,27 +72,23 @@ class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
           .read(paymentVoidControllerProvider.notifier)
           .voidPayment(payment.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment voided')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Payment voided')));
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not void payment: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not void payment: $e')));
     }
   }
 
   Future<void> _confirmAndRefund(Payment payment) async {
     final confirmed = await _confirmAction(
       title: 'Refund payment #${payment.invoiceNumber}?',
-      body:
-          'This returns the funds to the member and contributes a negative cash movement at the refund timestamp.',
+      body: 'This returns the funds to the member and contributes a negative cash movement at the refund timestamp.',
       confirmLabel: 'Refund',
       destructive: false,
     );
@@ -78,19 +98,17 @@ class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
           .read(paymentRefundControllerProvider.notifier)
           .refund(payment.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment refunded')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Payment refunded')));
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not refund payment: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not refund payment: $e')));
     }
   }
 
@@ -113,8 +131,9 @@ class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
           ),
           TextButton(
             style: TextButton.styleFrom(
-              foregroundColor:
-                  destructive ? LatoColors.error : LatoColors.primary,
+              foregroundColor: destructive
+                  ? LatoColors.error
+                  : LatoColors.primary,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
@@ -143,7 +162,7 @@ class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
         ),
       ),
       body: asyncPayment.when(
-        loading: () => const LatoLoading(),
+        loading: () => const _InvoiceSkeleton(),
         error: (err, _) => LatoErrorState(
           message: err is ApiException
               ? err.message
@@ -153,12 +172,18 @@ class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
         data: (payment) {
           return _InvoiceBody(
             payment: payment,
-            selectedAction: _selectedAction,
-            onActionChanged: (a) {
-              setState(() => _selectedAction = a);
-              if (a == _Action.markVoid) _confirmAndVoid(payment);
-              if (a == _Action.refunded) _confirmAndRefund(payment);
-            },
+            busy: _busy,
+            onVoid: () => _confirmAndVoid(payment),
+            onRefund: () => _confirmAndRefund(payment),
+            onShare: () => _withPdf(
+              payment,
+              (bytes, name) => Printing.sharePdf(bytes: bytes, filename: name),
+            ),
+            onPrint: () => _withPdf(
+              payment,
+              (bytes, name) =>
+                  Printing.layoutPdf(onLayout: (_) => bytes, name: name),
+            ),
           );
         },
       ),
@@ -166,28 +191,69 @@ class _PaymentInvoiceScreenState extends ConsumerState<PaymentInvoiceScreen> {
   }
 }
 
-enum _Action { paid, markVoid, refunded }
+final _dateFmt = DateFormat('d MMM y');
+
+String _dateTime(DateTime t) =>
+    '${_dateFmt.format(t.toLocal())} • ${DateFormat.jm().format(t.toLocal())}';
+
+/// Placeholder for [_InvoiceBody]: status card, total, member + invoice-code
+/// cards, itemized card and the bottom actions.
+class _InvoiceSkeleton extends StatelessWidget {
+  const _InvoiceSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: ListView(
+        key: const Key('invoice-skeleton'),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          LatoSpacing.xl,
+          LatoSpacing.lg,
+          LatoSpacing.xl,
+          LatoSpacing.xxl,
+        ),
+        children: const [
+          LatoSkeletonBlock(height: 108, radius: LatoRadius.lg),
+          SizedBox(height: LatoSpacing.md),
+          LatoSkeletonBlock(height: 120, radius: LatoRadius.lg),
+          SizedBox(height: LatoSpacing.md),
+          Row(
+            children: [
+              Expanded(child: LatoSkeletonBlock(height: 96, radius: LatoRadius.lg)),
+              SizedBox(width: LatoSpacing.md),
+              Expanded(child: LatoSkeletonBlock(height: 96, radius: LatoRadius.lg)),
+            ],
+          ),
+          SizedBox(height: LatoSpacing.md),
+          LatoSkeletonBlock(height: 180, radius: LatoRadius.lg),
+          SizedBox(height: LatoSpacing.lg),
+          LatoSkeletonBlock(height: 52, radius: LatoRadius.md),
+        ],
+      ),
+    );
+  }
+}
 
 class _InvoiceBody extends StatelessWidget {
   const _InvoiceBody({
     required this.payment,
-    required this.selectedAction,
-    required this.onActionChanged,
+    required this.busy,
+    required this.onVoid,
+    required this.onRefund,
+    required this.onShare,
+    required this.onPrint,
   });
 
   final Payment payment;
-  final _Action selectedAction;
-  final ValueChanged<_Action> onActionChanged;
+  final bool busy;
+  final VoidCallback onVoid;
+  final VoidCallback onRefund;
+  final VoidCallback onShare;
+  final VoidCallback onPrint;
 
   @override
   Widget build(BuildContext context) {
-    final timestamp = payment.paidAt ?? payment.createdAt;
-    final settledLabel = timestamp != null
-        ? 'Settled on ${DateFormat.yMMMd().add_jm().format(timestamp.toLocal())}'
-        : 'Settled date unknown';
-    final billingPeriod =
-        timestamp != null ? _billingPeriodLabel(timestamp.toLocal()) : '—';
-
     return CustomScrollView(
       slivers: [
         SliverPadding(
@@ -201,36 +267,31 @@ class _InvoiceBody extends StatelessWidget {
             delegate: SliverChildListDelegate.fixed([
               _StatusHeaderCard(
                 payment: payment,
-                selectedAction: selectedAction,
-                onActionChanged: onActionChanged,
+                onVoid: onVoid,
+                onRefund: onRefund,
               ),
               const SizedBox(height: LatoSpacing.md),
-              _TotalCard(
-                payment: payment,
-                settledLabel: settledLabel,
-              ),
+              _TotalCard(payment: payment),
               const SizedBox(height: LatoSpacing.md),
               IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: _MemberCard(payment: payment),
-                    ),
+                    Expanded(child: _MemberCard(payment: payment)),
                     const SizedBox(width: LatoSpacing.md),
-                    Expanded(
-                      child: _InvoiceCodeCard(
-                        payment: payment,
-                        billingPeriod: billingPeriod,
-                      ),
-                    ),
+                    Expanded(child: _InvoiceCodeCard(payment: payment)),
                   ],
                 ),
               ),
               const SizedBox(height: LatoSpacing.md),
               _ItemizedCard(payment: payment),
               const SizedBox(height: LatoSpacing.lg),
-              _BottomActions(payment: payment),
+              _BottomActions(
+                payment: payment,
+                busy: busy,
+                onShare: onShare,
+                onPrint: onPrint,
+              ),
               const SizedBox(height: LatoSpacing.xxl),
             ]),
           ),
@@ -238,141 +299,89 @@ class _InvoiceBody extends StatelessWidget {
       ],
     );
   }
-
-  /// "Oct 28 - Nov 28, 2024" — first day of paidAt's month through the
-  /// same day next month (covers the typical monthly membership span the
-  /// design renders).
-  static String _billingPeriodLabel(DateTime paid) {
-    final fmt = DateFormat('MMM d');
-    final next = DateTime(paid.year, paid.month + 1, paid.day);
-    return '${fmt.format(paid)} - ${fmt.format(next)}, ${paid.year}';
-  }
 }
 
+/// Real status chip, plus Void / Refund for a paid payment.
 class _StatusHeaderCard extends StatelessWidget {
   const _StatusHeaderCard({
     required this.payment,
-    required this.selectedAction,
-    required this.onActionChanged,
+    required this.onVoid,
+    required this.onRefund,
   });
 
   final Payment payment;
-  final _Action selectedAction;
-  final ValueChanged<_Action> onActionChanged;
+  final VoidCallback onVoid;
+  final VoidCallback onRefund;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final paidTone = payment.status == 'paid'
-        ? LatoChipTone.primary
-        : LatoChipTone.neutral;
+    final status = payment.status;
+    final (label, tone) = switch (status) {
+      'voided' => ('VOIDED', LatoChipTone.error),
+      'refunded' => ('REFUNDED', LatoChipTone.warning),
+      _ => ('PAID', LatoChipTone.success),
+    };
     return LatoCard(
       padding: const EdgeInsets.all(LatoSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: status pills (PAID + SETTLED)
-          Row(
-            children: [
-              const _LimeDot(),
-              const SizedBox(width: 6),
-              LatoStatusChip(label: 'PAID', tone: paidTone),
-              const SizedBox(width: LatoSpacing.sm),
-              const LatoStatusChip(
-                label: 'SETTLED',
-                tone: LatoChipTone.neutral,
-              ),
-            ],
-          ),
-          const SizedBox(height: LatoSpacing.md),
-          // Row 2: segmented Paid / Void / Refund
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outline),
-            ),
-            child: Row(
-              children: _Action.values.map((a) {
-                final isSel = a == selectedAction;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => onActionChanged(a),
-                    behavior: HitTestBehavior.opaque,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSel ? LatoColors.primary : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _actionLabel(a),
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: isSel
-                              ? LatoColors.bgDark
-                              : LatoColors.textSecondaryDark,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
+          LatoStatusChip(label: label, tone: tone),
+          if (status == 'paid') ...[
+            const SizedBox(height: LatoSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: LatoCompactActionButton(
+                    label: 'Void',
+                    color: LatoColors.error,
+                    borderColor: LatoColors.error.withValues(alpha: 0.5),
+                    onTap: onVoid,
                   ),
-                );
-              }).toList(),
+                ),
+                const SizedBox(width: LatoSpacing.sm),
+                Expanded(
+                  child: LatoCompactActionButton(
+                    label: 'Refund',
+                    color: LatoColors.textPrimaryDark,
+                    borderColor: LatoColors.borderStrongDark,
+                    onTap: onRefund,
+                  ),
+                ),
+              ],
             ),
-          ),
+          ],
         ],
-      ),
-    );
-  }
-
-  static String _actionLabel(_Action a) {
-    switch (a) {
-      case _Action.paid:
-        return 'Paid';
-      case _Action.markVoid:
-        return 'Void';
-      case _Action.refunded:
-        return 'Refund';
-    }
-  }
-}
-
-/// Small lime dot used as the leading bullet on the PAID pill row.
-class _LimeDot extends StatelessWidget {
-  const _LimeDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: const BoxDecoration(
-        color: LatoColors.primary,
-        shape: BoxShape.circle,
       ),
     );
   }
 }
 
 class _TotalCard extends StatelessWidget {
-  const _TotalCard({
-    required this.payment,
-    required this.settledLabel,
-  });
+  const _TotalCard({required this.payment});
 
   final Payment payment;
-  final String settledLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final active = payment.status == 'paid';
+    final label = switch (payment.status) {
+      'voided' => 'AMOUNT (VOIDED)',
+      'refunded' => 'AMOUNT (REFUNDED)',
+      _ => 'TOTAL AMOUNT CAPTURED',
+    };
     final whole = payment.amount.truncate();
-    final cents =
-        ((payment.amount - whole).abs() * 100).round().toString().padLeft(2, '0');
-    final wholeFmt = NumberFormat.decimalPattern().format(whole);
+    final cents = ((payment.amount - whole).abs() * 100)
+        .round()
+        .toString()
+        .padLeft(2, '0');
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final strike = active ? null : TextDecoration.lineThrough;
+    final at = payment.paidAt ?? payment.createdAt;
+    final dateLine = at == null
+        ? 'Date unknown'
+        : '${active ? 'Settled' : 'Paid'} on ${_dateTime(at)}';
 
     return LatoCard(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
@@ -380,9 +389,9 @@ class _TotalCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'TOTAL AMOUNT CAPTURED',
+            label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: muted,
               letterSpacing: 1.4,
             ),
           ),
@@ -391,28 +400,20 @@ class _TotalCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '\$$wholeFmt',
+                '₹${formatInrWhole(whole)}',
                 style: theme.textTheme.displayMedium?.copyWith(
                   fontWeight: FontWeight.w700,
+                  color: active ? null : muted,
+                  decoration: strike,
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.only(top: 8, left: 6),
+                padding: const EdgeInsets.only(top: 8, left: 4),
                 child: Text(
                   '.$cents',
                   style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              const SizedBox(width: LatoSpacing.sm),
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  'USD',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: LatoColors.primary,
-                    fontWeight: FontWeight.w700,
+                    color: muted,
+                    decoration: strike,
                   ),
                 ),
               ),
@@ -421,15 +422,15 @@ class _TotalCard extends StatelessWidget {
           const SizedBox(height: LatoSpacing.md),
           Row(
             children: [
-              const Icon(
-                Icons.check_circle,
+              Icon(
+                active ? Icons.check_circle : Icons.schedule,
                 size: 16,
-                color: LatoColors.primary,
+                color: active ? LatoColors.success : muted,
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  settledLabel,
+                  dateLine,
                   style: theme.textTheme.bodySmall,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -437,9 +438,8 @@ class _TotalCard extends StatelessWidget {
               ),
             ],
           ),
-          // Only a real, staff-entered reference is shown here — cash
-          // payments (and any payment recorded without one) have no
-          // transaction reference, so there is nothing honest to display.
+          // Only a real, staff-entered reference is shown here: cash
+          // payments (and any payment recorded without one) have none.
           if (payment.reference != null && payment.reference!.isNotEmpty) ...[
             const SizedBox(height: LatoSpacing.md),
             Row(
@@ -460,17 +460,14 @@ class _TotalCard extends StatelessWidget {
                       ClipboardData(text: payment.reference!),
                     );
                     if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('REF copied')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('REF copied')));
                   },
                   icon: const Icon(Icons.content_copy, size: 14),
                   label: const Text(
                     'Copy',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                   ),
                   style: TextButton.styleFrom(
                     foregroundColor: LatoColors.primary,
@@ -479,7 +476,7 @@ class _TotalCard extends StatelessWidget {
                       vertical: 0,
                     ),
                     minimumSize: const Size(0, 28),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    tapTargetSize: MaterialTapTargetSize.padded,
                   ),
                 ),
               ],
@@ -503,15 +500,29 @@ class _MemberCard extends StatelessWidget {
         : payment.memberId;
     return LatoCard(
       padding: const EdgeInsets.all(LatoSpacing.md),
+      onTap: payment.memberId.isEmpty
+          ? null
+          : () => context.push('/members/${payment.memberId}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'MEMBER ACCOUNT',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              letterSpacing: 1.2,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'MEMBER',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
           ),
           const SizedBox(height: LatoSpacing.sm),
           Text(
@@ -544,8 +555,6 @@ class _MemberCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Real plan name (when this payment is a plan purchase) —
-              // was a hardcoded 'TIER 1' chip with no backing concept.
               if (payment.planName != null && payment.planName!.isNotEmpty)
                 LatoStatusChip(
                   label: payment.planName!,
@@ -560,12 +569,8 @@ class _MemberCard extends StatelessWidget {
 }
 
 class _InvoiceCodeCard extends StatelessWidget {
-  const _InvoiceCodeCard({
-    required this.payment,
-    required this.billingPeriod,
-  });
+  const _InvoiceCodeCard({required this.payment});
   final Payment payment;
-  final String billingPeriod;
 
   @override
   Widget build(BuildContext context) {
@@ -595,7 +600,7 @@ class _InvoiceCodeCard extends StatelessWidget {
           ),
           const SizedBox(height: LatoSpacing.md),
           Text(
-            'BILLING PERIOD',
+            'PAYMENT TYPE',
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               letterSpacing: 1.2,
@@ -603,7 +608,7 @@ class _InvoiceCodeCard extends StatelessWidget {
           ),
           const SizedBox(height: LatoSpacing.xs),
           Text(
-            billingPeriod,
+            payment.typeLabel,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -644,50 +649,39 @@ class _ItemizedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final planName = (payment.planName == null || payment.planName!.isEmpty)
-        ? 'Membership Payment'
-        : payment.planName!;
-    // Prefer the real snapshot of what the plan actually included at
-    // purchase time; fall back to the staff's own notes; show nothing
-    // invented when neither exists (e.g. a dues payment, or a payment
-    // recorded before planFeatures existed).
+    final active = payment.status == 'paid';
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final lineName = (payment.planName ?? '').isNotEmpty
+        ? payment.planName!
+        : (payment.kind == 'dues' ? 'Dues Payment' : 'Membership Payment');
+    // Real snapshot of what the plan included at purchase time; falls back to
+    // the staff's own notes; nothing invented when neither exists.
     final features = payment.planFeatures ?? const <String>[];
     final description = features.isNotEmpty
         ? features.join(' • ')
         : (payment.notes != null && payment.notes!.isNotEmpty)
-            ? payment.notes!
-            : null;
-    final amount = payment.amount;
+        ? payment.notes!
+        : null;
+    final amount = formatInr(payment.amount);
 
     return LatoCard(
       padding: const EdgeInsets.all(LatoSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Itemized Charges',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                '1 item',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
+          Text(
+            'Itemized Charges',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: LatoSpacing.md),
-          // Line item
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
-                  planName,
+                  lineName,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -695,9 +689,11 @@ class _ItemizedCard extends StatelessWidget {
               ),
               const SizedBox(width: LatoSpacing.md),
               Text(
-                '\$${amount.toStringAsFixed(2)}',
+                amount,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w700,
+                  color: active ? null : muted,
+                  decoration: active ? null : TextDecoration.lineThrough,
                 ),
               ),
             ],
@@ -706,79 +702,44 @@ class _ItemizedCard extends StatelessWidget {
             const SizedBox(height: LatoSpacing.xs),
             Text(
               description,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
             ),
           ],
-          const SizedBox(height: LatoSpacing.sm),
-          Wrap(
-            spacing: LatoSpacing.sm,
-            runSpacing: LatoSpacing.xs,
-            children: [
-              // Real snapshot of the plan's duration at purchase time —
-              // was a hardcoded 'Cycle: Monthly' shown regardless of the
-              // plan's actual billing cycle.
-              if (payment.planDurationDays != null)
-                LatoStatusChip(
-                  label: 'Cycle: ${_cycleLabel(payment.planDurationDays!)}',
-                  tone: LatoChipTone.neutral,
-                ),
-              const LatoStatusChip(
-                label: 'Qty: 1',
-                tone: LatoChipTone.neutral,
-              ),
-            ],
-          ),
-          const SizedBox(height: LatoSpacing.md),
-          const Divider(height: 1),
-          const SizedBox(height: LatoSpacing.md),
-          // Breakdown
-          _BreakdownRow(
-            label: 'Subtotal',
-            value: '\$${amount.toStringAsFixed(2)}',
-          ),
-          const SizedBox(height: LatoSpacing.sm),
-          _BreakdownRow(
-            label: 'Tax / VAT (0.0%)',
-            value: '\$0.00',
-          ),
-          const SizedBox(height: LatoSpacing.sm),
-          _BreakdownRow(
-            label: 'Processing Fees',
-            value: 'Waived (\$0.00)',
-            valueColor: LatoColors.primary,
-          ),
+          if (payment.planDurationDays != null) ...[
+            const SizedBox(height: LatoSpacing.sm),
+            LatoStatusChip(
+              label: 'Cycle: ${_cycleLabel(payment.planDurationDays!)}',
+              tone: LatoChipTone.neutral,
+            ),
+          ],
           const SizedBox(height: LatoSpacing.md),
           const Divider(height: 1),
           const SizedBox(height: LatoSpacing.md),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Text(
-                  'Net Paid Amount',
+                  switch (payment.status) {
+                    'voided' => 'Amount (Voided)',
+                    'refunded' => 'Amount (Refunded)',
+                    _ => 'Amount Paid',
+                  },
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: LatoColors.primary,
+                    color: active ? LatoColors.primary : muted,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
               Text(
-                '\$${amount.toStringAsFixed(2)}',
+                amount,
                 style: theme.textTheme.headlineSmall?.copyWith(
-                  color: LatoColors.primary,
+                  color: active ? LatoColors.primary : muted,
+                  decoration: active ? null : TextDecoration.lineThrough,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'USD Currency',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
           ),
         ],
       ),
@@ -786,80 +747,54 @@ class _ItemizedCard extends StatelessWidget {
   }
 }
 
-class _BreakdownRow extends StatelessWidget {
-  const _BreakdownRow({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Text(label, style: theme.textTheme.bodyMedium),
-        ),
-        Text(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: valueColor,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _BottomActions extends StatelessWidget {
-  const _BottomActions({required this.payment});
+  const _BottomActions({
+    required this.payment,
+    required this.busy,
+    required this.onShare,
+    required this.onPrint,
+  });
   final Payment payment;
+  final bool busy;
+  final VoidCallback onShare;
+  final VoidCallback onPrint;
 
   @override
   Widget build(BuildContext context) {
     final status = payment.status;
     if (status == 'voided') {
-      final d = _formatDate(payment.voidedAt);
       return _StatusFooterChip(
         icon: Icons.block_outlined,
-        label: 'Voided on ${d ?? '—'}',
+        label: 'Voided on ${_formatDate(payment.voidedAt) ?? '—'}',
         tint: LatoColors.error,
       );
     }
     if (status == 'refunded') {
-      final d = _formatDate(payment.refundedAt);
       return _StatusFooterChip(
         icon: Icons.replay_outlined,
-        label: 'Refunded on ${d ?? '—'}',
+        label: 'Refunded on ${_formatDate(payment.refundedAt) ?? '—'}',
         tint: LatoColors.info,
       );
     }
-    // 'paid' (default) — show the Download / Print CTAs.
     return Column(
       children: [
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('PDF export coming soon'),
-                ),
-              );
-            },
-            icon: const Icon(Icons.download_outlined),
+            onPressed: busy ? null : onShare,
+            icon: busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.share_outlined),
             label: const Text(
-              'Download PDF Receipt',
+              'Share Receipt',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             ),
             style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
+              minimumSize: const Size.fromHeight(LatoSizes.button),
               backgroundColor: LatoColors.primary,
               foregroundColor: LatoColors.bgDark,
             ),
@@ -869,20 +804,14 @@ class _BottomActions extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Print handoff coming soon'),
-                ),
-              );
-            },
+            onPressed: busy ? null : onPrint,
             icon: const Icon(Icons.print_outlined),
             label: const Text(
               'Print Receipt',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             ),
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
+              minimumSize: const Size.fromHeight(LatoSizes.button),
               side: BorderSide(color: LatoColors.borderDark),
               foregroundColor: LatoColors.textPrimaryDark,
             ),
@@ -892,10 +821,8 @@ class _BottomActions extends StatelessWidget {
     );
   }
 
-  static String? _formatDate(DateTime? raw) {
-    if (raw == null) return null;
-    return DateFormat.yMMMd().format(raw.toLocal());
-  }
+  static String? _formatDate(DateTime? raw) =>
+      raw == null ? null : _dateFmt.format(raw.toLocal());
 }
 
 class _StatusFooterChip extends StatelessWidget {

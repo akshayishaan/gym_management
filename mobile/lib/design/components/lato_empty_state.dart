@@ -37,32 +37,21 @@ class LatoEmptyState extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: const Color(0xFF1F1F1F),
-              borderRadius: BorderRadius.circular(12),
+              color: LatoColors.surfaceRaisedDark,
+              borderRadius: BorderRadius.circular(LatoRadius.md),
               border: Border.all(color: LatoColors.borderDark),
             ),
             child: Icon(icon, size: 24, color: LatoColors.textSecondaryDark),
           ),
           const SizedBox(height: LatoSpacing.lg),
-          Text(
-            title,
-            style: text.titleMedium,
-            textAlign: TextAlign.center,
-          ),
+          Text(title, style: text.titleMedium, textAlign: TextAlign.center),
           if (body != null) ...[
             const SizedBox(height: LatoSpacing.xs),
-            Text(
-              body!,
-              style: text.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            Text(body!, style: text.bodySmall, textAlign: TextAlign.center),
           ],
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: LatoSpacing.lg),
-            OutlinedButton(
-              onPressed: onAction,
-              child: Text(actionLabel!),
-            ),
+            OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
           ],
         ],
       ),

@@ -41,6 +41,7 @@ class MemberCreateInput {
     this.emergencyContact,
     this.amountPaid,
     this.paymentMethod,
+    this.reference,
     String? requestId,
   }) : requestId = requestId ?? const Uuid().v4();
 
@@ -62,6 +63,7 @@ class MemberCreateInput {
   final String? emergencyContact;
   final double? amountPaid;
   final String? paymentMethod; // 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'
+  final String? reference; // UPI txn ID, card auth code, etc.
 
   Map<String, dynamic> toJson() => {
         'requestId': requestId,
@@ -82,6 +84,7 @@ class MemberCreateInput {
         if (amountPaid != null) 'amountPaid': amountPaid,
         if (paymentMethod != null && paymentMethod!.isNotEmpty)
           'paymentMethod': paymentMethod,
+        if (reference != null && reference!.isNotEmpty) 'reference': reference,
       };
 }
 

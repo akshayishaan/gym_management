@@ -60,7 +60,7 @@ export class AuthService {
     return this.issueTokens(staff);
   }
 
-  async signup(input: SignupInput): Promise<{ message: string }> {
+  async signup(input: SignupInput): Promise<AuthSession> {
     await this.connection.getConnection();
     const parsed = signupSchema.parse(input);
     const existing = await Staff.findOne({
@@ -71,7 +71,7 @@ export class AuthService {
       throw new DomainError("An account with this email already exists", 409);
     }
 
-    await Staff.create({
+    const staff = await Staff.create({
       name: parsed.name,
       email: parsed.email,
       password: parsed.password,
@@ -80,7 +80,9 @@ export class AuthService {
       isActive: true,
     });
 
-    return { message: "Account created successfully" };
+    // Issue tokens so signup logs the new operator straight in, matching the
+    // login contract the client expects ({ accessToken, refreshToken, user }).
+    return this.issueTokens(staff);
   }
 
   async refresh(input: RefreshInput): Promise<AuthSession> {

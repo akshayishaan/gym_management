@@ -22,8 +22,8 @@ class LatoTheme {
       surface: LatoColors.surfaceDark,
       onSurface: LatoColors.textPrimaryDark,
       surfaceContainer: LatoColors.surfaceDark,
-      surfaceContainerHigh: Color(0xFF1C1C1C),
-      surfaceContainerHighest: Color(0xFF242424),
+      surfaceContainerHigh: LatoColors.surfaceRaisedDark,
+      surfaceContainerHighest: LatoColors.surfaceHighestDark,
       onSurfaceVariant: LatoColors.textSecondaryDark,
       error: LatoColors.error,
       onError: Colors.white,
@@ -185,10 +185,8 @@ class LatoTheme {
         style: FilledButton.styleFrom(
           backgroundColor: colorScheme.primary,
           foregroundColor: colorScheme.onPrimary,
-          minimumSize: const Size.fromHeight(52),
-          shape: const RoundedRectangleBorder(
-            borderRadius: LatoRadius.button,
-          ),
+          minimumSize: const Size.fromHeight(LatoSizes.button),
+          shape: const RoundedRectangleBorder(borderRadius: LatoRadius.button),
           textStyle: textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -197,11 +195,9 @@ class LatoTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size.fromHeight(LatoSizes.button),
           side: BorderSide(color: colorScheme.outline, width: 1),
-          shape: const RoundedRectangleBorder(
-            borderRadius: LatoRadius.button,
-          ),
+          shape: const RoundedRectangleBorder(borderRadius: LatoRadius.button),
           textStyle: textTheme.titleMedium,
         ),
       ),
@@ -265,9 +261,7 @@ class LatoTheme {
         backgroundColor: colorScheme.surfaceContainerHighest,
         contentTextStyle: textTheme.bodyMedium,
         behavior: SnackBarBehavior.floating,
-        shape: const RoundedRectangleBorder(
-          borderRadius: LatoRadius.button,
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: LatoRadius.button),
       ),
     );
   }

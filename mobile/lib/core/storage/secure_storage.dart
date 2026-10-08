@@ -19,6 +19,7 @@ class SecureStore {
   static const _kStaffJson = 'staff';
   static const _kSelectedGymId = 'selectedGymId';
   static const _kThemeMode = 'theme_mode';
+  static const _kWelcomeSeen = 'welcome_seen';
 
   Future<void> writeTokens({
     required String accessToken,
@@ -47,14 +48,20 @@ class SecureStore {
   Future<void> writeSelectedGymId(String gymId) =>
       _storage.write(key: _kSelectedGymId, value: gymId);
 
-  Future<String?> readSelectedGymId() =>
-      _storage.read(key: _kSelectedGymId);
+  Future<String?> readSelectedGymId() => _storage.read(key: _kSelectedGymId);
 
   Future<void> writeThemeMode(String mode) =>
       _storage.write(key: _kThemeMode, value: mode);
 
-  Future<String?> readThemeMode() =>
-      _storage.read(key: _kThemeMode);
+  Future<String?> readThemeMode() => _storage.read(key: _kThemeMode);
+
+  /// Whether the welcome screen has been dismissed since install. Unset on
+  /// a fresh install, so the first launch shows it.
+  Future<bool> readWelcomeSeen() async =>
+      (await _storage.read(key: _kWelcomeSeen)) == '1';
+
+  Future<void> writeWelcomeSeen() =>
+      _storage.write(key: _kWelcomeSeen, value: '1');
 
   Future<void> clearAll() async {
     await _storage.deleteAll();

@@ -1,3 +1,5 @@
+import '../../../core/utils/money.dart';
+
 /// A RepiX Membership Plan as returned by `GET /plans`, `POST /plans`,
 /// and `PUT /plans/:id`. The backend's `plan.schema.ts` is the source
 /// of truth; this model mirrors it with camelCase Dart fields.
@@ -38,23 +40,10 @@ class Plan {
   /// denomination (dollars in the demo).
   final PlanStats? stats;
 
-  /// `$1,499.00` style label used on the plan card and form sheet.
-  /// Strips trailing `.00` for round prices (`$1,500`).
-  String get formattedPrice {
-    final whole = price.toInt();
-    final hasCents = (price - whole).abs() > 0.005;
-    final body = hasCents ? price.toStringAsFixed(2) : whole.toString();
-    // Thousands separators on the integer portion.
-    final parts = body.split('.');
-    final intPart = parts[0];
-    final buf = StringBuffer();
-    for (var i = 0; i < intPart.length; i++) {
-      if (i > 0 && (intPart.length - i) % 3 == 0) buf.write(',');
-      buf.write(intPart[i]);
-    }
-    final formatted = parts.length == 2 ? '${buf.toString()}.${parts[1]}' : buf.toString();
-    return '\$$formatted';
-  }
+  /// `₹1,499.50` style label used on the plan card and form sheet. Whole
+  /// prices drop the decimals (`₹1,500`). Indian digit grouping.
+  String get formattedPrice =>
+      formatInr(price, decimals: price % 1 == 0 ? 0 : 2);
 
   factory Plan.fromJson(Map<String, dynamic> json) {
     return Plan(

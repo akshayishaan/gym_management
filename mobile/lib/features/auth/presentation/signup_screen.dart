@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../design/components/lato_card.dart';
+import '../../../design/spacing.dart';
 import '../application/auth_controller.dart';
 
 /// Sign-up form. Same shape as login but with a `name` field. Backend creates
@@ -44,7 +45,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     });
 
     try {
-      await ref.read(authControllerProvider.notifier).signUp(
+      await ref
+          .read(authControllerProvider.notifier)
+          .signUp(
             name: _nameCtrl.text.trim(),
             email: _emailCtrl.text.trim(),
             password: _passwordCtrl.text,
@@ -53,7 +56,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       // Surface field-specific messages when the backend sends them.
       if (!mounted) return;
       final fields = e.fieldErrors.values.toList();
-      setState(() => _formError = fields.isNotEmpty ? fields.join(', ') : e.message);
+      setState(
+        () => _formError = fields.isNotEmpty ? fields.join(', ') : e.message,
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _formError = e.message);
@@ -79,7 +84,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          padding: const EdgeInsets.fromLTRB(
+            LatoSpacing.xl,
+            LatoSpacing.sm,
+            LatoSpacing.xl,
+            LatoSpacing.xxl,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -91,10 +101,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: LatoSpacing.xxl),
 
                 Text('Name', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
+                const SizedBox(height: LatoSpacing.sm),
                 TextFormField(
                   controller: _nameCtrl,
                   textCapitalization: TextCapitalization.words,
@@ -102,14 +112,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   validator: (v) {
                     final value = v?.trim() ?? '';
                     if (value.isEmpty) return 'Name is required';
-                    if (value.length > 100) return 'Keep it under 100 characters';
+                    if (value.length > 100) {
+                      return 'Keep it under 100 characters';
+                    }
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: LatoSpacing.xl),
 
                 Text('Email', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
+                const SizedBox(height: LatoSpacing.sm),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
@@ -123,10 +135,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: LatoSpacing.xl),
 
                 Text('Password', style: theme.textTheme.labelLarge),
-                const SizedBox(height: 8),
+                const SizedBox(height: LatoSpacing.sm),
                 TextFormField(
                   controller: _passwordCtrl,
                   obscureText: _obscurePassword,
@@ -140,9 +152,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
                       ),
-                      onPressed: () => setState(
-                        () => _obscurePassword = !_obscurePassword,
-                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (v) {
@@ -153,7 +164,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ),
 
                 if (_formError != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: LatoSpacing.md),
                   Text(
                     _formError!,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -162,13 +173,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ],
 
-                const SizedBox(height: 24),
+                const SizedBox(height: LatoSpacing.xxl),
                 LatoPrimaryButton(
                   label: 'Create account',
                   loading: _submitting,
                   onPressed: _submitting ? null : _onSubmit,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: LatoSpacing.lg),
 
                 Center(
                   child: Wrap(

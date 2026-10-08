@@ -40,23 +40,23 @@ class PaymentCreateInput {
   final String? notes;
 
   Map<String, dynamic> toJson() => {
-        'requestId': requestId,
-        'memberId': memberId,
-        if (planId != null && planId!.isNotEmpty) 'planId': planId,
-        'amount': amount,
-        'method': method,
-        if (membershipStart != null && membershipStart!.isNotEmpty)
-          'membershipStart': membershipStart,
-        if (reference != null && reference!.isNotEmpty) 'reference': reference,
-        if (notes != null && notes!.isNotEmpty) 'notes': notes,
-      };
+    'requestId': requestId,
+    'memberId': memberId,
+    if (planId != null && planId!.isNotEmpty) 'planId': planId,
+    'amount': amount,
+    'method': method,
+    if (membershipStart != null && membershipStart!.isNotEmpty)
+      'membershipStart': membershipStart,
+    if (reference != null && reference!.isNotEmpty) 'reference': reference,
+    if (notes != null && notes!.isNotEmpty) 'notes': notes,
+  };
 }
 
 /// Plain Dart transport shape for `POST /payments/:id/void` and
 /// `POST /payments/:id/refund`. Validated by `paymentActionSchema`.
 class PaymentActionInput {
   PaymentActionInput({this.reason, String? requestId})
-      : requestId = requestId ?? const Uuid().v4();
+    : requestId = requestId ?? const Uuid().v4();
 
   /// Client-generated UUID v4. Auto-generated per call; a fresh id keeps
   /// each action isolated from any prior retry the caller didn't make.
@@ -64,9 +64,9 @@ class PaymentActionInput {
   final String? reason;
 
   Map<String, dynamic> toJson() => {
-        'requestId': requestId,
-        if (reason != null && reason!.isNotEmpty) 'reason': reason,
-      };
+    'requestId': requestId,
+    if (reason != null && reason!.isNotEmpty) 'reason': reason,
+  };
 }
 
 /// Network access for the Payments feature. Routes live in
@@ -85,6 +85,7 @@ class PaymentRepository {
         queryParameters: {
           if (query.month != null && query.month!.isNotEmpty)
             'month': query.month,
+          if (query.status != null) 'status': query.status,
           'page': query.page,
           'limit': query.limit,
         },
@@ -157,7 +158,7 @@ class PaymentRepository {
         '/payments/$id/void',
         data: input.toJson(),
       );
-      if (res.statusCode == 200 && res.data != null) {
+      if (_isSuccess(res.statusCode) && res.data != null) {
         return res.data!;
       }
       throw toApiException(_badResponse(res));
@@ -178,7 +179,7 @@ class PaymentRepository {
         '/payments/$id/refund',
         data: input.toJson(),
       );
-      if (res.statusCode == 200 && res.data != null) {
+      if (_isSuccess(res.statusCode) && res.data != null) {
         return res.data!;
       }
       throw toApiException(_badResponse(res));
@@ -186,6 +187,9 @@ class PaymentRepository {
       throw toApiException(e);
     }
   }
+
+  /// Nest answers `POST` actions with 201 unless `@HttpCode` overrides it.
+  bool _isSuccess(int? code) => code != null && code >= 200 && code < 300;
 
   Object _badResponse(Response res) {
     return DioException(
@@ -202,18 +206,16 @@ final paymentRepositoryProvider = Provider<PaymentRepository>((ref) {
 
 /// Paginated list of payments for the active gym. Re-runs when the
 /// active gym changes so switching tenants refreshes the ledger.
-final paymentListProvider =
-    FutureProvider.autoDispose.family<PaymentsListResult, PaymentListQuery>(
-  (ref, query) {
-    ref.watch(activeGymProvider);
-    return ref.watch(paymentRepositoryProvider).getPayments(query);
-  },
-);
+final paymentListProvider = FutureProvider.autoDispose
+    .family<PaymentsListResult, PaymentListQuery>((ref, query) {
+      ref.watch(activeGymProvider);
+      return ref.watch(paymentRepositoryProvider).getPayments(query);
+    });
 
 /// Single-payment detail. Watches the active gym so tenant switches
 /// invalidate the open detail page.
-final paymentDetailProvider =
-    FutureProvider.autoDispose.family<Payment, String>((ref, id) {
-  ref.watch(activeGymProvider);
-  return ref.watch(paymentRepositoryProvider).getPayment(id);
-});
+final paymentDetailProvider = FutureProvider.autoDispose
+    .family<Payment, String>((ref, id) {
+      ref.watch(activeGymProvider);
+      return ref.watch(paymentRepositoryProvider).getPayment(id);
+    });

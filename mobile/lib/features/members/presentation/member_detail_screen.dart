@@ -11,18 +11,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/api/dio_client.dart';
 import '../../../core/utils/contact_launcher.dart';
+import '../../../core/utils/money.dart';
 import '../../../design/colors.dart';
+import '../../../design/components/lato_sheet.dart';
 import '../../../design/components/lato_card.dart';
 import '../../../design/components/lato_empty_state.dart';
 import '../../../design/components/lato_error_state.dart';
-import '../../../design/components/lato_loading.dart';
+import '../../../design/components/lato_skeleton.dart';
 import '../../../design/components/lato_status_chip.dart';
 import '../../../design/spacing.dart';
+import '../../dashboard/data/dashboard_repository.dart';
+import '../../payments/data/payment_repository.dart';
 import '../../payments/presentation/payment_form_sheet.dart';
+import '../../plans/data/plan_repository.dart';
 import '../application/member_controller.dart';
 import '../data/member_repository.dart';
 import '../domain/member.dart';
@@ -34,8 +40,7 @@ class MemberDetailScreen extends ConsumerStatefulWidget {
   final String id;
 
   @override
-  ConsumerState<MemberDetailScreen> createState() =>
-      _MemberDetailScreenState();
+  ConsumerState<MemberDetailScreen> createState() => _MemberDetailScreenState();
 }
 
 enum _Tab { overview, history, payments }
@@ -44,19 +49,9 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
   _Tab _selectedTab = _Tab.overview;
 
   Future<void> _openEditSheet(Member member) async {
-    await showModalBottomSheet<void>(
+    await showLatoFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: LatoColors.surfaceDark,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-      ),
-      builder: (_) => FractionallySizedBox(
-        heightFactor: 0.92,
-        child: MemberFormSheet(existingMember: member),
-      ),
+      builder: (_) => MemberFormSheet(existingMember: member),
     );
   }
 
@@ -91,9 +86,8 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
           .read(memberDeleteControllerProvider.notifier)
           .softDelete(member.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Member deleted')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Member deleted')));
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
@@ -113,8 +107,11 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
           asyncMember.maybeWhen(
             data: (member) => IconButton(
               tooltip: 'Edit',
-              icon: const Icon(Icons.edit_outlined,
-                  color: LatoColors.primary, size: 22),
+              icon: const Icon(
+                Icons.edit_outlined,
+                color: LatoColors.primary,
+                size: 22,
+              ),
               onPressed: () => _openEditSheet(member),
             ),
             orElse: () => const SizedBox(width: 48),
@@ -122,7 +119,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
         ],
       ),
       body: asyncMember.when(
-        loading: () => const LatoLoading(),
+        loading: () => const _DetailSkeleton(),
         error: (err, _) => LatoErrorState(
           message: err is ApiException ? err.message : 'Could not load member.',
           onRetry: () => ref.invalidate(memberDetailProvider(widget.id)),
@@ -133,6 +130,127 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
           onTabChanged: (t) => setState(() => _selectedTab = t),
           onDelete: () => _confirmAndDelete(member),
         ),
+      ),
+    );
+  }
+}
+
+/// Placeholder for [_DetailBody]: identity card, quick actions, tab bar and a
+/// couple of overview cards, with the real screen's padding.
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: ListView(
+        key: const Key('member-detail-skeleton'),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          LatoSpacing.xl,
+          LatoSpacing.lg,
+          LatoSpacing.xl,
+          LatoSpacing.xxxl,
+        ),
+        children: [
+          const LatoCard(
+            padding: EdgeInsets.all(LatoSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    LatoSkeletonBlock(width: 64, height: 64, radius: 16),
+                    SizedBox(width: LatoSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          LatoSkeletonBlock(width: 150, height: 20),
+                          SizedBox(height: 6),
+                          LatoSkeletonBlock(width: 100, height: 14),
+                          SizedBox(height: 6),
+                          LatoSkeletonBlock(width: 110, height: 12),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: LatoSpacing.sm),
+                    LatoSkeletonBlock(
+                      width: 64,
+                      height: 24,
+                      radius: LatoRadius.pill,
+                    ),
+                  ],
+                ),
+                SizedBox(height: LatoSpacing.md),
+                Divider(height: 1),
+                SizedBox(height: LatoSpacing.md),
+                Row(
+                  children: [
+                    LatoSkeletonBlock(width: 110, height: 12),
+                    Spacer(),
+                    LatoSkeletonBlock(
+                      width: 72,
+                      height: 24,
+                      radius: LatoRadius.pill,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: LatoSpacing.md),
+          Row(
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                if (i > 0) const SizedBox(width: LatoSpacing.md),
+                const Expanded(
+                  child: LatoSkeletonBlock(height: 64, radius: LatoRadius.md),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: LatoSpacing.lg),
+          const LatoSkeletonBlock(height: 48, radius: LatoRadius.md),
+          const SizedBox(height: LatoSpacing.lg),
+          const _TabRowsSkeleton(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Placeholder rows for the History and Payments tabs while they load.
+class _TabRowsSkeleton extends StatelessWidget {
+  const _TabRowsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: Column(
+        children: [
+          for (var i = 0; i < 3; i++) ...[
+            const LatoCard(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LatoSkeletonBlock(width: 140, height: 16),
+                        SizedBox(height: 6),
+                        LatoSkeletonBlock(width: 100, height: 12),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: LatoSpacing.sm),
+                  LatoSkeletonBlock(width: 72, height: 20),
+                ],
+              ),
+            ),
+            if (i < 2) const SizedBox(height: LatoSpacing.md),
+          ],
+        ],
       ),
     );
   }
@@ -168,10 +286,7 @@ class _DetailBody extends ConsumerWidget {
               const SizedBox(height: LatoSpacing.md),
               _QuickActionsRow(member: member),
               const SizedBox(height: LatoSpacing.lg),
-              _TabsRow(
-                selected: selectedTab,
-                onChanged: onTabChanged,
-              ),
+              _TabsRow(selected: selectedTab, onChanged: onTabChanged),
               const SizedBox(height: LatoSpacing.lg),
             ]),
           ),
@@ -240,10 +355,7 @@ class _IdentityCard extends StatelessWidget {
                       maxLines: 1,
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      member.phone,
-                      style: theme.textTheme.bodySmall,
-                    ),
+                    Text(member.phone, style: theme.textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -316,10 +428,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = member.status;
     if (status == 'active') {
-      return const LatoStatusChip(
-        label: 'ACTIVE',
-        tone: LatoChipTone.primary,
-      );
+      return const LatoStatusChip(label: 'ACTIVE', tone: LatoChipTone.primary);
     }
     if (status == 'expiring') {
       return const LatoStatusChip(
@@ -328,10 +437,7 @@ class _StatusChip extends StatelessWidget {
       );
     }
     if (status == 'expired') {
-      return const LatoStatusChip(
-        label: 'EXPIRED',
-        tone: LatoChipTone.error,
-      );
+      return const LatoStatusChip(label: 'EXPIRED', tone: LatoChipTone.error);
     }
     return LatoStatusChip(
       label: member.isActive ? 'ACTIVE' : 'INACTIVE',
@@ -348,49 +454,34 @@ class _PaymentPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (isPaidUp) {
-      return Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: LatoSpacing.md,
-          vertical: LatoSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: LatoColors.primary.withValues(alpha: 0.16),
-          borderRadius: LatoRadius.chip,
-          border: Border.all(color: LatoColors.primary),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.check_circle, size: 14, color: LatoColors.primary),
-            const SizedBox(width: 4),
-            Text(
-              'Paid in Full',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: LatoColors.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    // Same colours as the Members list pill: green when settled, red when due.
+    final color = isPaidUp ? LatoColors.success : LatoColors.error;
+    final due = formatInr(dueAmount, decimals: dueAmount % 1 == 0 ? 0 : 2);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: LatoSpacing.md,
         vertical: LatoSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: LatoColors.warning.withValues(alpha: 0.16),
+        color: LatoColors.tint(color),
         borderRadius: LatoRadius.chip,
-        border: Border.all(color: LatoColors.warning),
+        border: Border.all(color: color),
       ),
-      child: Text(
-        'Due: \$${dueAmount.toStringAsFixed(2)}',
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: LatoColors.warning,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isPaidUp) ...[
+            Icon(Icons.check_circle, size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            isPaidUp ? 'Paid in Full' : 'Due: $due',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -401,18 +492,9 @@ class _QuickActionsRow extends StatelessWidget {
   final Member member;
 
   Future<void> _openPaymentSheet(BuildContext context) async {
-    await showModalBottomSheet<void>(
+    await showLatoFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: LatoColors.surfaceDark,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(LatoRadius.xl)),
-      ),
-      builder: (sheetCtx) => FractionallySizedBox(
-        heightFactor: 0.92,
-        child: PaymentFormSheet(member: member),
-      ),
+      builder: (_) => PaymentFormSheet(member: member),
     );
   }
 
@@ -563,24 +645,31 @@ class _TabsRow extends StatelessWidget {
         children: _Tab.values.map((t) {
           final isSel = t == selected;
           return Expanded(
-            child: GestureDetector(
+            child: Semantics(
+              button: true,
+              selected: isSel,
+              label: _label(t),
+              excludeSemantics: true,
               onTap: () => onChanged(t),
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSel ? LatoColors.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _label(t),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: isSel
-                        ? LatoColors.bgDark
-                        : LatoColors.textSecondaryDark,
-                    fontWeight: FontWeight.w700,
+              child: GestureDetector(
+                onTap: () => onChanged(t),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSel ? LatoColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _label(t),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: isSel
+                          ? LatoColors.bgDark
+                          : LatoColors.textSecondaryDark,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -602,7 +691,7 @@ class _OverviewTab extends StatelessWidget {
     final dob = _parseDate(member.dateOfBirth);
     final ageLabel = dob != null ? _ageFromDob(dob) : null;
     final dobLabel = dob != null
-        ? DateFormat.yMMMd().format(dob)
+        ? _dateFormat.format(dob)
         : (member.dateOfBirth ?? '—');
     final emergency = member.emergencyContact;
     final address = member.address;
@@ -615,54 +704,21 @@ class _OverviewTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Personal Profile',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => Navigator.of(context).maybePop(),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Edit',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(
-                                  color: LatoColors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.edit, size: 14,
-                              color: LatoColors.primary),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              Text(
+                'Personal Profile',
+                style: Theme.of(context).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: LatoSpacing.md),
               if ((member.email ?? '').isNotEmpty)
                 _KeyValueRow(label: 'Email', value: member.email!),
               _KeyValueRow(
                 label: 'Gender / Age',
-                value: '${_genderLabel(member.gender)} • '
-                    '${ageLabel != null ? '$ageLabel yrs' : '—'} '
-                    '($dobLabel)',
+                value:
+                    '${_genderLabel(member.gender)} • '
+                    '${ageLabel != null ? '$ageLabel yrs' : '—'}',
               ),
+              _KeyValueRow(label: 'Date of Birth', value: dobLabel),
               _KeyValueRow(
                 label: 'Residential',
                 value: (address == null || address.isEmpty) ? '—' : address,
@@ -689,9 +745,8 @@ class _OverviewTab extends StatelessWidget {
               children: [
                 Text(
                   'Notes',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: LatoSpacing.sm),
                 Text(
@@ -709,7 +764,7 @@ class _OverviewTab extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: LatoColors.error,
               side: const BorderSide(color: LatoColors.error, width: 1),
-              minimumSize: const Size.fromHeight(48),
+              minimumSize: const Size.fromHeight(LatoSizes.button),
             ),
             onPressed: onDelete,
             child: const Text(
@@ -778,8 +833,9 @@ class _KeyValueRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: LatoSpacing.sm),
       child: Row(
-        crossAxisAlignment:
-            alignTop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment: alignTop
+            ? CrossAxisAlignment.start
+            : CrossAxisAlignment.center,
         children: [
           SizedBox(
             width: 130,
@@ -807,29 +863,60 @@ class _KeyValueRow extends StatelessWidget {
 
 // ----------------------------- History tab --------------------------------
 
-final _memberMembershipsProvider =
-    FutureProvider.autoDispose.family<List<dynamic>, String>((ref, memberId) async {
-  final dio = ref.watch(dioProvider);
-  final res = await dio.get<Map<String, dynamic>>(
-    '/memberships',
-    queryParameters: {'memberId': memberId},
-  );
-  final data = res.data ?? const {};
-  return (data['memberships'] as List?) ?? const [];
-});
+final _memberMembershipsProvider = FutureProvider.autoDispose
+    .family<List<dynamic>, String>((ref, memberId) async {
+      final dio = ref.watch(dioProvider);
+      final res = await dio.get<Map<String, dynamic>>(
+        '/memberships',
+        queryParameters: {'memberId': memberId},
+      );
+      final data = res.data ?? const {};
+      return (data['memberships'] as List?) ?? const [];
+    });
 
 class _HistoryTab extends ConsumerWidget {
   const _HistoryTab({required this.memberId});
   final String memberId;
 
+  /// `POST /memberships/:id/reverse` once the card has confirmed. The backend voids the
+  /// plan's payment and recomputes the member's balance in one transaction;
+  /// it refuses unless this is the member's newest plan purchase.
+  Future<void> _reverse(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> membership,
+  ) async {
+    final id = membership['_id'] ?? membership['id'];
+    if (id is! String) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(dioProvider)
+          .post<Map<String, dynamic>>(
+            '/memberships/$id/reverse',
+            data: {'requestId': const Uuid().v4()},
+          );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(toApiException(e).message)),
+      );
+      return;
+    }
+    ref.invalidate(_memberMembershipsProvider(memberId));
+    ref.invalidate(_memberPaymentsProvider(memberId));
+    ref.invalidate(memberDetailProvider(memberId));
+    ref.invalidate(memberListProvider);
+    ref.invalidate(paymentListProvider);
+    ref.invalidate(planListProvider);
+    ref.invalidate(dashboardProvider);
+    messenger.showSnackBar(const SnackBar(content: Text('Plan reversed')));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_memberMembershipsProvider(memberId));
     return async.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: LatoSpacing.xxxl),
-        child: LatoLoading(),
-      ),
+      loading: () => const _TabRowsSkeleton(),
       error: (err, _) => LatoEmptyState(
         icon: Icons.error_outline,
         title: 'Could not load history',
@@ -847,7 +934,10 @@ class _HistoryTab extends ConsumerWidget {
         return Column(
           children: [
             for (final m in list) ...[
-              _MembershipCard(json: m),
+              _MembershipCard(
+                json: m,
+                onReverse: () => _reverse(context, ref, m),
+              ),
               const SizedBox(height: LatoSpacing.md),
             ],
           ],
@@ -857,9 +947,54 @@ class _HistoryTab extends ConsumerWidget {
   }
 }
 
-class _MembershipCard extends StatelessWidget {
-  const _MembershipCard({required this.json});
+class _MembershipCard extends StatefulWidget {
+  const _MembershipCard({required this.json, required this.onReverse});
   final Map<String, dynamic> json;
+  final Future<void> Function() onReverse;
+
+  @override
+  State<_MembershipCard> createState() => _MembershipCardState();
+}
+
+class _MembershipCardState extends State<_MembershipCard> {
+  bool _reversing = false;
+  Map<String, dynamic> get json => widget.json;
+
+  Future<void> _onReverse() async {
+    final plan = _planName();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: LatoColors.surfaceDark,
+        title: const Text('Reverse this plan?'),
+        content: Text(
+          '$plan will be cancelled and its payment marked void. '
+          "The member's balance is recalculated. This cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: LatoColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              'Reverse Plan',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _reversing = true);
+    try {
+      await widget.onReverse();
+    } finally {
+      if (mounted) setState(() => _reversing = false);
+    }
+  }
 
   String _planName() {
     final name = json['planName'];
@@ -877,16 +1012,10 @@ class _MembershipCard extends StatelessWidget {
     final expiryStatus = json['expiryStatus'];
     final rawStatus = json['status'];
     if (rawStatus == 'reversed') {
-      return const LatoStatusChip(
-        label: 'REVERSED',
-        tone: LatoChipTone.error,
-      );
+      return const LatoStatusChip(label: 'REVERSED', tone: LatoChipTone.error);
     }
     if (expiryStatus == 'expired' || rawStatus == 'voided') {
-      return const LatoStatusChip(
-        label: 'EXPIRED',
-        tone: LatoChipTone.error,
-      );
+      return const LatoStatusChip(label: 'EXPIRED', tone: LatoChipTone.error);
     }
     if (expiryStatus == 'expiring') {
       return const LatoStatusChip(
@@ -894,10 +1023,7 @@ class _MembershipCard extends StatelessWidget {
         tone: LatoChipTone.warning,
       );
     }
-    return const LatoStatusChip(
-      label: 'ACTIVE',
-      tone: LatoChipTone.primary,
-    );
+    return const LatoStatusChip(label: 'ACTIVE', tone: LatoChipTone.primary);
   }
 
   bool _isCurrentActive() {
@@ -950,16 +1076,10 @@ class _MembershipCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: _DateLabel(
-                  label: 'START DATE',
-                  value: _startDate(),
-                ),
+                child: _DateLabel(label: 'START DATE', value: _startDate()),
               ),
               Expanded(
-                child: _DateLabel(
-                  label: 'EXPIRY (AUTO-RENEWS)',
-                  value: _expiryDate(),
-                ),
+                child: _DateLabel(label: 'EXPIRES', value: _expiryDate()),
               ),
             ],
           ),
@@ -974,21 +1094,19 @@ class _MembershipCard extends StatelessWidget {
                   side: BorderSide(
                     color: LatoColors.error.withValues(alpha: 0.5),
                   ),
-                  minimumSize: const Size.fromHeight(44),
+                  minimumSize: const Size.fromHeight(LatoSizes.button),
                 ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Reverse Plan is not wired up yet (Phase 6+).',
+                onPressed: _reversing ? null : _onReverse,
+                child: _reversing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text(
+                        'Reverse Plan',
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Reverse Plan',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
               ),
             ),
           ],
@@ -1030,16 +1148,16 @@ class _DateLabel extends StatelessWidget {
 
 // ----------------------------- Payments tab -------------------------------
 
-final _memberPaymentsProvider =
-    FutureProvider.autoDispose.family<List<dynamic>, String>((ref, memberId) async {
-  final dio = ref.watch(dioProvider);
-  final res = await dio.get<Map<String, dynamic>>(
-    '/payments',
-    queryParameters: {'memberId': memberId, 'limit': 50},
-  );
-  final data = res.data ?? const {};
-  return (data['payments'] as List?) ?? const [];
-});
+final _memberPaymentsProvider = FutureProvider.autoDispose
+    .family<List<dynamic>, String>((ref, memberId) async {
+      final dio = ref.watch(dioProvider);
+      final res = await dio.get<Map<String, dynamic>>(
+        '/payments',
+        queryParameters: {'memberId': memberId, 'limit': 50},
+      );
+      final data = res.data ?? const {};
+      return (data['payments'] as List?) ?? const [];
+    });
 
 class _PaymentsTab extends ConsumerWidget {
   const _PaymentsTab({required this.memberId});
@@ -1049,10 +1167,7 @@ class _PaymentsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_memberPaymentsProvider(memberId));
     return async.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: LatoSpacing.xxxl),
-        child: LatoLoading(),
-      ),
+      loading: () => const _TabRowsSkeleton(),
       error: (err, _) => LatoEmptyState(
         icon: Icons.error_outline,
         title: 'Could not load payments',
@@ -1137,8 +1252,7 @@ class _PaymentCard extends StatelessWidget {
     final dt = DateTime.tryParse(raw);
     if (dt == null) return raw;
     final local = dt.toLocal();
-    return '${DateFormat.yMMMd().format(local)} • '
-        '${DateFormat.jm().format(local)}';
+    return '${_dateFormat.format(local)} • ${DateFormat.jm().format(local)}';
   }
 
   @override
@@ -1167,9 +1281,9 @@ class _PaymentCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '+\$${amount.toStringAsFixed(2)}',
+                    '+${formatInr(amount)}',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: LatoColors.primary,
+                      color: LatoColors.success,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1193,12 +1307,7 @@ class _PaymentCard extends StatelessWidget {
                 color: LatoColors.textSecondaryDark,
               ),
               const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  _when(),
-                  style: theme.textTheme.bodySmall,
-                ),
-              ),
+              Expanded(child: Text(_when(), style: theme.textTheme.bodySmall)),
               const SizedBox(width: LatoSpacing.sm),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -1235,12 +1344,20 @@ class _PaymentCard extends StatelessWidget {
   }
 }
 
+/// Day-first date shown everywhere in the app, e.g. `13 Oct 2026`.
+final _dateFormat = DateFormat('d MMM y');
+
 String _formatYmd(dynamic raw) {
   if (raw is! String || raw.isEmpty) return '—';
-  // Server emits 'YYYY-MM-DD' (date-only) already; just render as-is.
-  if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw)) return raw;
+  // Server emits 'YYYY-MM-DD' (date-only). Format the parts directly so the
+  // device time zone cannot shift the day.
+  final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(raw);
+  if (m != null) {
+    return _dateFormat.format(
+      DateTime(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!)),
+    );
+  }
   final dt = DateTime.tryParse(raw);
   if (dt == null) return raw;
-  return DateFormat.yMMMd().format(dt);
+  return _dateFormat.format(dt);
 }
-

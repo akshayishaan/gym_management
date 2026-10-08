@@ -12,6 +12,7 @@ class Staff {
   final String id;
   final String name;
   final String email;
+
   /// Server-set role (e.g. "admin"). Currently only "admin" is issued by
   /// the backend signup flow.
   final String role;
@@ -23,7 +24,8 @@ class Staff {
       name: json['name'] as String,
       email: json['email'] as String,
       role: json['role'] as String? ?? 'admin',
-      gymIds: (json['gymIds'] as List<dynamic>?)
+      gymIds:
+          (json['gymIds'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           const [],
@@ -31,10 +33,10 @@ class Staff {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'email': email,
-        'role': role,
-        'gymIds': gymIds,
-      };
+    'id': id,
+    'name': name,
+    'email': email,
+    'role': role,
+    'gymIds': gymIds,
+  };
 }

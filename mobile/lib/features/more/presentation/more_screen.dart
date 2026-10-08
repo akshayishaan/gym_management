@@ -27,11 +27,7 @@ class MoreScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 56,
-        title: const Text('Operations'),
-        actions: const [_NotificationButton()],
-      ),
+      appBar: AppBar(toolbarHeight: 56, title: const Text('Operations')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           LatoSpacing.xl,
@@ -49,33 +45,27 @@ class MoreScreen extends ConsumerWidget {
               _NavRow(
                 icon: Icons.workspace_premium_outlined,
                 title: 'Plans',
-                subtitle: 'Membership tiers, pricing & billing cycles',
+                subtitle: 'Membership plans and pricing',
                 route: '/plans',
+                isFirst: true,
               ),
               _NavRow(
                 icon: Icons.bar_chart_outlined,
                 title: 'Reports',
-                subtitle: 'Financial analytics, attendance & retention metrics',
+                subtitle: 'Revenue and member reports',
                 route: '/reports',
               ),
               _NavRow(
                 icon: Icons.history,
                 title: 'Activity',
-                subtitle: 'Live check-in feed, staff logs & audit trail',
+                subtitle: 'Staff actions and audit trail',
                 route: '/activity',
               ),
               _NavRow(
                 icon: Icons.business_outlined,
                 title: 'My Gyms',
-                subtitle: 'Switch active location & manage facility branches',
-                route: '/gym/picker',
-              ),
-              _NavRow(
-                icon: Icons.settings_outlined,
-                title: 'Gym Settings',
-                subtitle: 'Name, address, currency, timezone & reminders',
-                route: '/settings',
-                isLast: true,
+                subtitle: 'Switch, add or edit gyms',
+                route: '/gyms',
               ),
             ],
           ),
@@ -86,42 +76,6 @@ class MoreScreen extends ConsumerWidget {
           const SizedBox(height: LatoSpacing.lg),
           const _SignOutButton(),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// AppBar
-// ---------------------------------------------------------------------------
-
-class _NotificationButton extends StatelessWidget {
-  const _NotificationButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Notifications — coming soon')),
-            );
-          },
-          child: const SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(
-              Icons.notifications_outlined,
-              size: 20,
-              color: LatoColors.textSecondaryDark,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -179,9 +133,7 @@ class _ProfileCard extends StatelessWidget {
     if (fullName == null || fullName.trim().isEmpty) return '?';
     final parts = fullName.trim().split(RegExp(r'\s+'));
     final first = parts.first.isNotEmpty ? parts.first[0] : '';
-    final last = parts.length > 1 && parts.last.isNotEmpty
-        ? parts.last[0]
-        : '';
+    final last = parts.length > 1 && parts.last.isNotEmpty ? parts.last[0] : '';
     final out = (first + last).toUpperCase();
     return out.isEmpty ? '?' : out;
   }
@@ -232,7 +184,7 @@ class _SectionEyebrow extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: Color(0xFFC4C9AC),
+          color: LatoColors.textSecondaryDark,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.55,
@@ -268,21 +220,21 @@ class _NavRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.route,
-    this.isLast = false,
+    this.isFirst = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String route;
-  final bool isLast;
+  final bool isFirst;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.go(route),
+        onTap: () => context.push(route),
         child: Container(
           constraints: const BoxConstraints(minHeight: 60),
           padding: const EdgeInsets.symmetric(
@@ -290,7 +242,7 @@ class _NavRow extends StatelessWidget {
             vertical: LatoSpacing.md,
           ),
           decoration: BoxDecoration(
-            border: isLast
+            border: isFirst
                 ? null
                 : const Border(
                     top: BorderSide(color: LatoColors.borderDark, width: 1),
@@ -355,19 +307,12 @@ class _IconTile extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: const Color(0xFF262A31),
+        color: LatoColors.bgDark,
         borderRadius: BorderRadius.circular(LatoRadius.sm),
-        border: Border.all(
-          color: const Color(0xFF31353C),
-          width: 1,
-        ),
+        border: Border.all(color: LatoColors.borderStrongDark, width: 1),
       ),
       alignment: Alignment.center,
-      child: Icon(
-        icon,
-        size: 18,
-        color: LatoColors.textSecondaryDark,
-      ),
+      child: Icon(icon, size: 18, color: LatoColors.textSecondaryDark),
     );
   }
 }
@@ -442,10 +387,10 @@ class _AppearancePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const selectedBorder = LatoColors.primary;
-    const unselectedBorder = Color(0xFF31353C);
+    const unselectedBorder = LatoColors.borderStrongDark;
 
     return Material(
-      color: const Color(0xFF1C2026),
+      color: LatoColors.surfaceDark,
       borderRadius: BorderRadius.circular(LatoRadius.md),
       child: InkWell(
         onTap: onTap,
@@ -465,42 +410,41 @@ class _AppearancePill extends StatelessWidget {
           child: Stack(
             children: [
               if (selected)
-                const Positioned(
-                  top: 4,
-                  right: 4,
-                  child: _SelectedDot(),
-                ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: 18,
-                    color: selected
-                        ? LatoColors.primary
-                        : LatoColors.textPrimaryDark,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    label,
-                    style: TextStyle(
+                const Positioned(top: 4, right: 4, child: _SelectedDot()),
+              SizedBox(
+                width: double.infinity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 18,
                       color: selected
                           ? LatoColors.primary
                           : LatoColors.textPrimaryDark,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    secondary,
-                    style: const TextStyle(
-                      color: LatoColors.textSecondaryDark,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w400,
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: selected
+                            ? LatoColors.primary
+                            : LatoColors.textPrimaryDark,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      secondary,
+                      style: const TextStyle(
+                        color: LatoColors.textSecondaryDark,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -533,14 +477,41 @@ class _SelectedDot extends StatelessWidget {
 class _SignOutButton extends ConsumerWidget {
   const _SignOutButton();
 
+  Future<void> _confirm(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: LatoColors.surfaceDark,
+        title: const Text('Sign out?'),
+        content: const Text('You will need to log in again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: LatoColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              'Sign out',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(authControllerProvider.notifier).signOut();
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: LatoSizes.button,
       child: OutlinedButton.icon(
-        onPressed: () =>
-            ref.read(authControllerProvider.notifier).signOut(),
+        onPressed: () => _confirm(context, ref),
         icon: const Icon(Icons.logout, size: 18, color: LatoColors.error),
         label: const Text(
           'Sign Out',

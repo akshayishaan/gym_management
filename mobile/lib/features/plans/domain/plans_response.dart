@@ -9,6 +9,7 @@ class PlansResponse {
     required this.page,
     required this.limit,
     this.summary,
+    this.counts,
   });
 
   final List<Plan> plans;
@@ -20,7 +21,25 @@ class PlansResponse {
   /// default). The list screen reads this for the KPI card.
   final PlansSummary? summary;
 
+  /// Gym-wide plan counts for the filter pills (not affected by filters).
+  final PlanCounts? counts;
+
   bool get hasMore => page * limit < total;
+}
+
+/// All / active / paused plan counts for the whole gym.
+class PlanCounts {
+  const PlanCounts({this.all = 0, this.active = 0, this.inactive = 0});
+
+  final int all;
+  final int active;
+  final int inactive;
+
+  factory PlanCounts.fromJson(Map<String, dynamic> json) => PlanCounts(
+    all: (json['all'] as num?)?.toInt() ?? 0,
+    active: (json['active'] as num?)?.toInt() ?? 0,
+    inactive: (json['inactive'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// Portfolio roll-up returned alongside the plan list. Mirrors the
@@ -43,8 +62,7 @@ class PlansSummary {
       activePlans: (json['activePlans'] as num?)?.toInt() ?? 0,
       activeMembers: (json['activeMembers'] as num?)?.toInt() ?? 0,
       salesYtd: (json['salesYtd'] as num?)?.toInt() ?? 0,
-      revenueAtSaleYtd:
-          (json['revenueAtSaleYtd'] as num?)?.toDouble() ?? 0,
+      revenueAtSaleYtd: (json['revenueAtSaleYtd'] as num?)?.toDouble() ?? 0,
     );
   }
 }

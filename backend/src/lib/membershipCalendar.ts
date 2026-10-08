@@ -75,6 +75,18 @@ export function calendarDaysBetween(start: DateOnly, end: DateOnly): number {
   return Math.round((dateOnlyAsUtc(end).getTime() - dateOnlyAsUtc(start).getTime()) / 86_400_000);
 }
 
+/**
+ * The same day-of-month one calendar month earlier, clamped to that month's
+ * last day (31 March -> 28/29 February).
+ */
+export function sameDayPreviousMonth(value: DateOnly): DateOnly {
+  const [year, month, day] = assertDateOnly(value).split("-").map(Number);
+  const previousYear = month === 1 ? year - 1 : year;
+  const previousMonth = month === 1 ? 12 : month - 1;
+  const maxDay = new Date(Date.UTC(previousYear, previousMonth, 0)).getUTCDate();
+  return `${String(previousYear).padStart(4, "0")}-${String(previousMonth).padStart(2, "0")}-${String(Math.min(day, maxDay)).padStart(2, "0")}`;
+}
+
 export function calculateMembershipExpiry(start: DateOnly, durationDays: number): DateOnly {
   if (!Number.isInteger(durationDays) || durationDays < 1) {
     throw new Error("Membership duration must be at least one day");

@@ -44,14 +44,14 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
-try {
+    try {
       final res = await _dio.post<Map<String, dynamic>>(
         '/auth/login',
         data: {'email': email, 'password': password},
       );
-if (res.statusCode == 200 && res.data != null) {
+      if (res.statusCode == 200 && res.data != null) {
         final session = _parseSession(res.data!);
-return session;
+        return session;
       }
       throw toApiException(_badResponse(res));
     } on DioException catch (e) {
