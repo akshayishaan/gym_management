@@ -320,4 +320,24 @@ void main() {
     expect(find.text('Monthly'), findsOneWidget);
     expect(find.text('Paused Plan'), findsNothing);
   });
+
+  testWidgets('start date field appears only once a plan is selected', (
+    tester,
+  ) async {
+    await _open(tester, member: _member(due: 500), withPlans: true);
+
+    // Dues payment (the default): no membership period, so no start date.
+    expect(find.text('Start date'), findsNothing);
+
+    // Pick a plan.
+    await tester.tap(find.text('Dues payment (no plan)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Monthly'));
+    await tester.pumpAndSettle();
+
+    // The plan purchase now exposes an optional start date (defaulting
+    // to today).
+    expect(find.text('Start date'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+  });
 }
