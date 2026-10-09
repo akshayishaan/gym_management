@@ -22,3 +22,7 @@ dist/
 /mobile/build/
 /mobile/coverage/
 *.tsbuildinfo
+
+cost.sh
+backend/.omc/**
+.planning/**
