@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Staff, type IStaff } from "../schemas";
@@ -34,6 +34,11 @@ export interface AuthSession {
  * Issues and rotates JWT credentials. Replaces the Next.js NextAuth flow with
  * a plain short-lived access token + long-lived rotating refresh token. The
  * refresh token is stored only as a sha256 hash on the Staff document.
+ *
+ * One login is active per account: login/signup mint a new `sessionId`, and
+ * both tokens carry it as `sid`. Signing in again replaces the stored value, so
+ * every token from the previous login is rejected (access tokens by
+ * JwtAuthGuard on the next request, refresh tokens here).
  */
 @Injectable()
 export class AuthService {
@@ -57,7 +62,7 @@ export class AuthService {
 
     staff.lastLogin = new Date();
 
-    return this.issueTokens(staff);
+    return this.issueTokens(staff, randomUUID());
   }
 
   async signup(input: SignupInput): Promise<AuthSession> {
@@ -82,16 +87,16 @@ export class AuthService {
 
     // Issue tokens so signup logs the new operator straight in, matching the
     // login contract the client expects ({ accessToken, refreshToken, user }).
-    return this.issueTokens(staff);
+    return this.issueTokens(staff, randomUUID());
   }
 
   async refresh(input: RefreshInput): Promise<AuthSession> {
     await this.connection.getConnection();
     const parsed = refreshSchema.parse(input);
 
-    let payload: { sub: string };
+    let payload: { sub: string; sid?: string };
     try {
-      payload = await this.jwtService.verifyAsync<{ sub: string }>(
+      payload = await this.jwtService.verifyAsync<{ sub: string; sid?: string }>(
         parsed.refreshToken,
         { secret: this.refreshSecret() },
       );
@@ -101,6 +106,12 @@ export class AuthService {
 
     const staff = await Staff.findById(payload.sub);
     if (!staff) {
+      throw new AuthError("Invalid refresh token");
+    }
+
+    // A token without `sid` predates single-session enforcement; it is
+    // rejected like one from a replaced login, so the client signs in again.
+    if (!payload.sid || payload.sid !== staff.sessionId) {
       throw new AuthError("Invalid refresh token");
     }
 
@@ -116,31 +127,62 @@ export class AuthService {
       throw new AuthError("Invalid refresh token");
     }
 
-    return this.issueTokens(staff);
+    return this.issueTokens(staff, payload.sid, rawHash);
   }
 
-  private async issueTokens(staff: IStaff): Promise<AuthSession> {
+  /**
+   * Signs a token pair for `sessionId` and persists the refresh token hash.
+   *
+   * Without `rotateFrom` (login/signup) this starts a new session and
+   * overwrites the previous one. With `rotateFrom` (refresh) it only swaps the
+   * hash if the session and the presented token are still current, so a login
+   * or another refresh that won a race is never overwritten.
+   */
+  private async issueTokens(
+    staff: IStaff,
+    sessionId: string,
+    rotateFrom?: string,
+  ): Promise<AuthSession> {
     const accessSecret = this.accessSecret();
     const refreshSecret = this.refreshSecret();
 
     const sub = staff._id.toString();
-    const payload = { sub, role: staff.role };
+    const payload = { sub, role: staff.role, sid: sessionId };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: accessSecret,
       expiresIn: ACCESS_TOKEN_TTL,
     });
 
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: refreshSecret,
-      expiresIn: `${REFRESH_TOKEN_TTL_DAYS}d`,
-    });
+    // `jti` makes every refresh token unique even when two are signed in the
+    // same second; otherwise rotation could yield an identical token and hash.
+    const refreshToken = await this.jwtService.signAsync(
+      { ...payload, jti: randomUUID() },
+      {
+        secret: refreshSecret,
+        expiresIn: `${REFRESH_TOKEN_TTL_DAYS}d`,
+      },
+    );
 
-    staff.refreshTokenHash = createHash("sha256")
+    const refreshTokenHash = createHash("sha256")
       .update(refreshToken)
       .digest("hex");
-    staff.refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
-    await staff.save();
+    const refreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+    if (rotateFrom) {
+      const result = await Staff.updateOne(
+        { _id: staff._id, sessionId, refreshTokenHash: rotateFrom },
+        { $set: { refreshTokenHash, refreshTokenExpiresAt } },
+      );
+      if (result.matchedCount === 0) {
+        throw new AuthError("Invalid refresh token");
+      }
+    } else {
+      staff.sessionId = sessionId;
+      staff.refreshTokenHash = refreshTokenHash;
+      staff.refreshTokenExpiresAt = refreshTokenExpiresAt;
+      await staff.save();
+    }
 
     return {
       accessToken,

@@ -13,6 +13,7 @@ import type { AuthenticatedRequest, AuthenticatedUser } from "../auth.types";
 
 interface AccessTokenPayload {
   sub: string;
+  sid?: string;
 }
 
 /**
@@ -20,6 +21,10 @@ interface AccessTokenPayload {
  * Verifies the access token, loads the Staff document, rejects inactive users,
  * and hydrates `req.user` (including per-request `gymIds`) for downstream use —
  * notably `RequireGymGuard`.
+ *
+ * The token's `sid` must equal the Staff's current `sessionId`. Signing in
+ * again replaces that value, so a replaced login's access token is rejected on
+ * its next request instead of staying valid until it expires.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -52,6 +57,12 @@ export class JwtAuthGuard implements CanActivate {
     const staff = await Staff.findById(payload.sub);
 
     if (!staff || staff.isActive !== true) {
+      throw new AuthError();
+    }
+
+    // Tokens without `sid` predate single-session enforcement and are rejected
+    // too, so every client signs in once more after deploy.
+    if (!payload.sid || payload.sid !== staff.sessionId) {
       throw new AuthError();
     }
 
