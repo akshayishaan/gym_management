@@ -25,7 +25,12 @@ enum AuthStage {
 
 @immutable
 class AuthState {
-  const AuthState({required this.stage, this.staff, this.showWelcome = false});
+  const AuthState({
+    required this.stage,
+    this.staff,
+    this.showWelcome = false,
+    this.sessionInvalidated = false,
+  });
 
   final AuthStage stage;
   final Staff? staff;
@@ -35,6 +40,10 @@ class AuthState {
   /// straight to login.
   final bool showWelcome;
 
+  /// True when the previous session was invalidated server-side (signed in
+  /// on another device). The login screen shows an explanatory message.
+  final bool sessionInvalidated;
+
   static const initial = AuthState(stage: AuthStage.unknown);
 
   AuthState copyWith({
@@ -42,11 +51,13 @@ class AuthState {
     Staff? staff,
     bool? showWelcome,
     bool clearStaff = false,
+    bool? sessionInvalidated,
   }) {
     return AuthState(
       stage: stage ?? this.stage,
       staff: clearStaff ? null : (staff ?? this.staff),
       showWelcome: showWelcome ?? this.showWelcome,
+      sessionInvalidated: sessionInvalidated ?? this.sessionInvalidated,
     );
   }
 }
@@ -154,6 +165,19 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState(
       stage: AuthStage.unauthenticated,
       showWelcome: true,
+    );
+  }
+
+  /// Server-side session invalidation (e.g. the same account signed in on
+  /// another device, which rotates the single refresh token). Wipes local
+  /// credentials and routes to login with an explanatory message — unlike
+  /// [signOut], this is not user-initiated, so no welcome screen.
+  Future<void> forceSignOut() async {
+    await _store.clearAll();
+    state = const AuthState(
+      stage: AuthStage.unauthenticated,
+      showWelcome: false,
+      sessionInvalidated: true,
     );
   }
 

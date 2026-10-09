@@ -64,6 +64,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final invalidated = ref.watch(
+      authControllerProvider.select((s) => s.sessionInvalidated),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -84,6 +87,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (invalidated) ...[
+                  Text(
+                    'Your session ended because this account was signed in on '
+                    'another device. Please log in again.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                  const SizedBox(height: LatoSpacing.lg),
+                ],
                 Text(
                   'Fill in the fields below to access your account.',
                   style: theme.textTheme.bodyMedium?.copyWith(
