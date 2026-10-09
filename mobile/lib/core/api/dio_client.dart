@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../storage/secure_storage.dart';
+import '../../features/auth/application/auth_controller.dart';
 import 'api_exception.dart';
 
 /// Base URL for the backend.
@@ -128,6 +129,15 @@ class _AuthInterceptor extends Interceptor {
         '/auth/refresh',
         data: {'refreshToken': refresh},
       );
+      if (res.statusCode == 401) {
+        // The refresh token was rejected — the session was invalidated
+        // server-side (the account signed in on another device, which
+        // rotates the single refresh token). Wipe local credentials and
+        // route to the login screen instead of surfacing "request failed".
+        await store.clearAll();
+        ref.read(authControllerProvider.notifier).forceSignOut();
+        return null;
+      }
       if (res.statusCode != 200 || res.data == null) return null;
       final access = res.data!['accessToken'] as String?;
       final newRefresh = res.data!['refreshToken'] as String?;
