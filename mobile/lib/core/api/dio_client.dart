@@ -52,6 +52,23 @@ Dio buildDio(Ref ref) {
 /// a `MockAdapter`.
 final dioProvider = Provider<Dio>(buildDio);
 
+/// Interceptor-free [Dio] for the token refresh call and for replaying a
+/// request after a refresh. It must not share [dioProvider]'s interceptors, or
+/// a 401 on the refresh call would recurse into the refresh logic.
+///
+/// Like [buildDio], it returns non-5xx responses instead of throwing: a 401
+/// from `/auth/refresh` means the session was replaced, and has to be handled
+/// as a response. Tests override this with [buildBareDio] plus a fake adapter,
+/// so the real configuration is what they exercise.
+Dio buildBareDio() => Dio(
+  BaseOptions(
+    baseUrl: kApiBase,
+    validateStatus: (status) => status != null && status < 500,
+  ),
+);
+
+final bareDioProvider = Provider<Dio>((ref) => buildBareDio());
+
 /// Calls `POST /auth/refresh` with the saved refresh token. Returns the new
 /// access + refresh tokens, or null if no refresh token is available or the
 /// refresh itself failed.
@@ -124,18 +141,16 @@ class _AuthInterceptor extends Interceptor {
     final refresh = tokens.refreshToken;
     if (refresh == null || refresh.isEmpty) return null;
     try {
-      final dio = Dio(BaseOptions(baseUrl: kApiBase));
-      final res = await dio.post<Map<String, dynamic>>(
+      final res = await ref.read(bareDioProvider).post<Map<String, dynamic>>(
         '/auth/refresh',
         data: {'refreshToken': refresh},
       );
       if (res.statusCode == 401) {
-        // The refresh token was rejected — the session was invalidated
+        // The refresh token was rejected: the session was invalidated
         // server-side (the account signed in on another device, which
-        // rotates the single refresh token). Wipe local credentials and
-        // route to the login screen instead of surfacing "request failed".
-        await store.clearAll();
-        ref.read(authControllerProvider.notifier).forceSignOut();
+        // replaces the active session). Wipe local credentials and route to
+        // the login screen instead of surfacing "request failed".
+        await ref.read(authControllerProvider.notifier).forceSignOut();
         return null;
       }
       if (res.statusCode != 200 || res.data == null) return null;
@@ -153,8 +168,7 @@ class _AuthInterceptor extends Interceptor {
     RequestOptions original,
     String accessToken,
   ) {
-    final dio = Dio(BaseOptions(baseUrl: kApiBase));
-    return dio.fetch<dynamic>(
+    return ref.read(bareDioProvider).fetch<dynamic>(
       original
           .copyWith(
             headers: Map<String, dynamic>.from(original.headers)
