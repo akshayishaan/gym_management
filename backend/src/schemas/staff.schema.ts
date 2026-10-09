@@ -9,6 +9,12 @@ export interface IStaff extends Document {
   role: string;
   isActive: boolean;
   lastLogin?: Date;
+  /**
+   * Identifies the one active login. Every login/signup replaces it, and both
+   * tokens carry it as `sid`, so signing in elsewhere invalidates all tokens
+   * issued for the previous login (see JwtAuthGuard).
+   */
+  sessionId?: string;
   refreshTokenHash?: string;
   refreshTokenExpiresAt?: Date;
   createdAt: Date;
@@ -35,6 +41,7 @@ const StaffSchema = new Schema<IStaff>(
     },
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },
+    sessionId: { type: String },
     refreshTokenHash: { type: String },
     refreshTokenExpiresAt: { type: Date },
   },
